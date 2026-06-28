@@ -37,6 +37,7 @@ from metadata_tag_tools import EDITABLE_FIELDS, decode_image_payload, save_artwo
 
 
 def content_type_for(path: Path) -> str:
+    """! @brief Return the browser-facing MIME type for a local media file."""
     if path.suffix.lower() == ".flac":
         return "audio/flac"
     if path.suffix.lower() == ".m4a":
@@ -71,6 +72,8 @@ def parse_range_header(range_header: str | None, file_size: int) -> tuple[HTTPSt
 
 
 class Handler(BaseHTTPRequestHandler):
+    """! @brief HTTP handler for the local player UI, streaming, and JSON APIs."""
+
     library: Library
     editable = True
     edit_password = ""
@@ -87,6 +90,7 @@ class Handler(BaseHTTPRequestHandler):
                 log.write(line)
 
     def send_bytes(self, body: bytes, content_type: str, status: int = 200, cache_control: str = "no-store") -> None:
+        """! @brief Send a complete byte payload with explicit HTTP headers."""
         self.send_response(status)
         self.send_header("Content-Type", content_type)
         self.send_header("Content-Length", str(len(body)))
@@ -95,6 +99,7 @@ class Handler(BaseHTTPRequestHandler):
         self.wfile.write(body)
 
     def send_json(self, payload: object, status: int = 200) -> None:
+        """! @brief Send a JSON response using the shared response helper."""
         self.send_bytes(json.dumps(payload, ensure_ascii=False).encode("utf-8"), "application/json; charset=utf-8", status)
 
     def send_ok(self, **payload: object) -> None:
@@ -104,6 +109,7 @@ class Handler(BaseHTTPRequestHandler):
         self.send_json({"ok": False, "error": error}, status=status)
 
     def read_json_body(self) -> object:
+        """! @brief Decode the request body as JSON for POST endpoints."""
         length = int(self.headers.get("Content-Length", "0"))
         return json.loads(self.rfile.read(length).decode("utf-8"))
 
@@ -120,6 +126,7 @@ class Handler(BaseHTTPRequestHandler):
             return None
 
     def edit_is_unlocked(self) -> bool:
+        """! @brief Check whether this request may use edit-only endpoints."""
         if not self.edit_password:
             return True
         token = self.headers.get("X-Edit-Token", "")
@@ -138,6 +145,11 @@ class Handler(BaseHTTPRequestHandler):
         return True
 
     def send_file(self, path: Path, cache_control: str = "no-store") -> None:
+        """! @brief Send a small static file or cached image.
+
+        Large media files use stream_file() instead so playback can begin before
+        the whole file is read.
+        """
         if not path.is_file():
             self.send_error(HTTPStatus.NOT_FOUND)
             return
@@ -250,6 +262,7 @@ class Handler(BaseHTTPRequestHandler):
         self.send_error(HTTPStatus.NOT_FOUND)
 
     def handle_edit_login(self) -> None:
+        """! @brief Validate the edit password and issue an in-memory token."""
         # Edit tokens are kept in memory only. Restarting the server locks edit
         # mode again, which is a nice low-fuss safety reset.
         if not self.editable:
@@ -280,6 +293,7 @@ class Handler(BaseHTTPRequestHandler):
         self.send_ok()
 
     def handle_track_metadata(self, path_text: str) -> None:
+        """! @brief Update metadata tags for one track, then refresh the library."""
         track_id = self.parse_track_id_from_api_path(path_text)
         if track_id is None:
             self.send_error(HTTPStatus.BAD_REQUEST)
@@ -299,6 +313,10 @@ class Handler(BaseHTTPRequestHandler):
             self.send_error_json(str(exc), status=500)
 
     def artwork_scope_paths(self, track_id: int, path: Path, payload: object) -> tuple[list[Path], str | None]:
+        """! @brief Resolve an artwork write request into filesystem targets.
+
+        @return Tuple of editable paths and an optional validation error.
+        """
         if not isinstance(payload, dict):
             return [], "Invalid artwork request."
         scope = str(payload.get("scope", "song")).strip().lower()
@@ -321,6 +339,7 @@ class Handler(BaseHTTPRequestHandler):
         return editable_paths, None
 
     def handle_artwork_update(self, path_text: str) -> None:
+        """! @brief Replace embedded artwork for one song, album, or selection."""
         track_id = self.parse_track_id_from_api_path(path_text)
         if track_id is None:
             self.send_error(HTTPStatus.BAD_REQUEST)
@@ -348,6 +367,7 @@ class Handler(BaseHTTPRequestHandler):
             self.send_error_json(str(exc), status=500)
 
     def handle_bulk_metadata(self) -> None:
+        """! @brief Apply non-empty metadata fields to selected tracks."""
         try:
             payload = self.read_json_body()
             ids = [int(track_id) for track_id in payload.get("ids", [])]
@@ -393,6 +413,7 @@ class Handler(BaseHTTPRequestHandler):
         self.send_bytes(artwork.data, artwork.mime, cache_control="public, max-age=86400")
 
     def handle_audio(self, path_text: str) -> None:
+        """! @brief Stream audio by track ID without reading tags during playback."""
         track_id = self.parse_last_int(path_text)
         if track_id is None:
             self.send_error(HTTPStatus.NOT_FOUND)
@@ -404,6 +425,7 @@ class Handler(BaseHTTPRequestHandler):
         self.stream_file(path, label=f"audio track {track_id}", debug=True)
 
     def handle_video(self, path_text: str) -> None:
+        """! @brief Stream video by ID using the shared range-aware pipeline."""
         video_id = self.parse_last_int(path_text)
         if video_id is None:
             self.send_error(HTTPStatus.NOT_FOUND)
@@ -415,6 +437,7 @@ class Handler(BaseHTTPRequestHandler):
         self.stream_file(path, label=f"video {video_id}", debug=False)
 
     def send_stream_headers(self, path: Path, status: HTTPStatus, start: int, end: int, file_size: int) -> None:
+        """! @brief Send HTTP headers for full or partial media responses."""
         length = end - start + 1
         self.send_response(status)
         self.send_header("Content-Type", content_type_for(path))
@@ -426,6 +449,7 @@ class Handler(BaseHTTPRequestHandler):
         self.end_headers()
 
     def write_file_range(self, path: Path, start: int, length: int, label: str, request_started: float, debug: bool) -> None:
+        """! @brief Copy a byte range from disk to the response stream."""
         with path.open("rb") as handle:
             handle.seek(start)
             remaining = length
@@ -447,6 +471,7 @@ class Handler(BaseHTTPRequestHandler):
                 return
 
     def stream_file(self, path: Path, label: str, debug: bool = False) -> None:
+        """! @brief Stream audio/video with HTTP Range support for fast playback."""
         # Stream directly from disk with Range support. This is what keeps large
         # FLAC files seekable and lets browsers start before the whole file loads.
         request_started = time.perf_counter()

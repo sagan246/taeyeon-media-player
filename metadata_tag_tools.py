@@ -23,6 +23,11 @@ EDITABLE_FIELDS = (
 
 
 def load_editable_tags(path: Path):
+    """! @brief Load a mutagen tag object suitable for writing common fields.
+
+    MP3 files may not have an ID3 header yet, so this creates one before
+    returning EasyID3. The caller is responsible for saving after changes.
+    """
     suffix = path.suffix.lower()
     if suffix == ".mp3":
         try:
@@ -42,11 +47,17 @@ def load_editable_tags(path: Path):
 
 
 def current_value(tags, field: str) -> str:
+    """! @brief Return the first value for an editable tag field."""
     values = tags.get(field, [])
     return str(values[0]).strip() if values else ""
 
 
 def save_metadata(path: Path, values: dict[str, str]) -> dict[str, object]:
+    """! @brief Write common text metadata fields to one audio file.
+
+    Empty values delete existing fields. Unsupported fields are ignored by
+    design so UI payloads can include only the known EDITABLE_FIELDS.
+    """
     clean_values = {
         field: str(values.get(field, "")).strip()
         for field in EDITABLE_FIELDS
@@ -73,6 +84,7 @@ def save_metadata(path: Path, values: dict[str, str]) -> dict[str, object]:
 
 
 def decode_image_payload(payload: dict[str, object]) -> tuple[bytes, str]:
+    """! @brief Decode and validate an artwork data URL from the browser."""
     image_data = str(payload.get("image_data", ""))
     match = re.match(r"^data:(image/[A-Za-z0-9.+-]+);base64,(.+)$", image_data, re.DOTALL)
     if not match:
@@ -90,6 +102,7 @@ def decode_image_payload(payload: dict[str, object]) -> tuple[bytes, str]:
 
 
 def save_artwork(path: Path, image_data: bytes, mime: str) -> dict[str, object]:
+    """! @brief Replace embedded cover art for a single MP3 or FLAC file."""
     suffix = path.suffix.lower()
     if suffix not in {".mp3", ".flac"}:
         return {"path": str(path), "ok": False, "error": "Only MP3 and FLAC artwork edits are supported"}
@@ -125,6 +138,7 @@ def save_artwork(path: Path, image_data: bytes, mime: str) -> dict[str, object]:
 
 
 def save_artwork_for_paths(paths: list[Path], image_data: bytes, mime: str) -> dict[str, object]:
+    """! @brief Replace artwork for many files and return per-file results."""
     results = [save_artwork(path, image_data, mime) for path in paths]
     ok_count = sum(1 for result in results if result.get("ok"))
     return {"changed": ok_count, "results": results}

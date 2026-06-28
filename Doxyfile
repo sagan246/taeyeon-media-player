@@ -1,0 +1,37 @@
+# Doxygen config for Taeyeon Media Player.
+#
+# Generate docs from this folder with:
+#   doxygen Doxyfile
+
+PROJECT_NAME           = "Taeyeon Media Player"
+PROJECT_BRIEF          = "Local-first music/video library player and optional metadata editor"
+OUTPUT_DIRECTORY       = docs/doxygen
+CREATE_SUBDIRS         = NO
+
+INPUT                  = . assets README.md
+FILE_PATTERNS          = *.py *.js *.html *.css *.md
+RECURSIVE              = YES
+EXCLUDE                = vendor taeyeon_media_player_cache __pycache__ .git docs/doxygen
+EXCLUDE_PATTERNS       = *_cache.json *.log
+
+QUIET                  = YES
+WARN_IF_UNDOCUMENTED   = NO
+WARN_IF_DOC_ERROR      = YES
+
+EXTRACT_ALL            = YES
+EXTRACT_PRIVATE        = NO
+EXTRACT_STATIC         = YES
+JAVADOC_AUTOBRIEF      = YES
+QT_AUTOBRIEF           = YES
+OPTIMIZE_OUTPUT_JAVA   = YES
+
+GENERATE_HTML          = YES
+GENERATE_LATEX         = NO
+HTML_OUTPUT            = html
+SOURCE_BROWSER         = YES
+INLINE_SOURCES         = NO
+REFERENCED_BY_RELATION = YES
+REFERENCES_RELATION    = YES
+
+MARKDOWN_SUPPORT       = YES
+AUTOLINK_SUPPORT       = YES

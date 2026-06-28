@@ -24,6 +24,8 @@ VIDEO_THUMBNAIL_EXTENSIONS = (".jpg", ".jpeg", ".png", ".webp")
 
 @dataclass
 class LibrarySnapshot:
+    """! @brief Complete scan result swapped into Library atomically."""
+
     tracks: list[Track]
     paths: list[Path]
     artwork: dict[int, Artwork]
@@ -127,6 +129,7 @@ def build_library_snapshot(music_dir: Path, video_dir: Path, interviews_dir: Pat
 
 
 def load_scan_cache() -> dict[str, dict[str, object]]:
+    """! @brief Load cached audio metadata/artwork records from disk."""
     if not SCAN_CACHE_PATH.exists():
         return {}
     try:
@@ -139,6 +142,7 @@ def load_scan_cache() -> dict[str, dict[str, object]]:
 
 
 def save_scan_cache(files: dict[str, dict[str, object]]) -> None:
+    """! @brief Persist scan cache records after a successful music scan."""
     SCAN_CACHE_PATH.parent.mkdir(parents=True, exist_ok=True)
     SCAN_CACHE_PATH.write_text(
         json.dumps({"version": SCAN_CACHE_VERSION, "files": files}, ensure_ascii=False),
@@ -150,6 +154,7 @@ def scan_music(
     music_dir: Path,
     cache: dict[str, dict[str, object]],
 ) -> tuple[list[Track], list[Path], dict[int, Artwork], dict[str, dict[str, object]]]:
+    """! @brief Scan audio files and reuse cached metadata when possible."""
     # Metadata/artwork reads are the slow part. The scan cache lets playback and
     # refreshes stay quick unless a file's size or modified time actually changed.
     tracks: list[Track] = []
@@ -278,6 +283,7 @@ def artwork_from_cache(entry: dict[str, object]) -> Artwork | None:
 
 
 def scan_videos(video_dir: Path) -> tuple[list[Video], list[Path], dict[int, Path], dict[str, Path]]:
+    """! @brief Scan video files and optional sidecar cover images."""
     # Video thumbnails are simple sidecar files next to videos/folders. We avoid
     # generating thumbnails here so scans stay predictable.
     video_paths = video_files(video_dir)
@@ -331,6 +337,7 @@ def video_files(video_dir: Path) -> list[Path]:
 
 
 def scan_interviews(interviews_dir: Path) -> list[Interview]:
+    """! @brief Scan plain text interview files into readable records."""
     # Interviews are just local text files. The UI groups them by filename/year
     # instead of needing a separate database.
     interview_paths = interview_files(interviews_dir)
@@ -403,6 +410,7 @@ def contains_cjk(value: str) -> bool:
 
 
 def track_review_flags(title: str, artist: str, album: str, albumartist: str) -> list[str]:
+    """! @brief Return soft cleanup warnings for non-English or odd metadata."""
     flags = []
     artist_lower = artist.strip().lower()
     albumartist_lower = albumartist.strip().lower()
@@ -420,6 +428,7 @@ def track_review_flags(title: str, artist: str, album: str, albumartist: str) ->
 
 
 def find_video_thumbnail(path: Path) -> Path | None:
+    """! @brief Find a same-name image next to a video file, if present."""
     # Individual video thumbnails are optional sidecars named like the video:
     # Example.mp4 can use Example.jpg, Example.png, or Example.webp.
     for extension in VIDEO_THUMBNAIL_EXTENSIONS:
@@ -430,6 +439,7 @@ def find_video_thumbnail(path: Path) -> Path | None:
 
 
 def find_video_folder_cover(folder: Path) -> Path | None:
+    """! @brief Find cover.jpg/png/webp in a video folder."""
     # Folder covers are optional sidecars named cover.jpg/png/webp.
     for extension in VIDEO_THUMBNAIL_EXTENSIONS:
         candidate = folder / f"cover{extension}"

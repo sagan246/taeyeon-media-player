@@ -142,6 +142,11 @@
     function renderStatsPills(items){
       statsEl.innerHTML = items.map(([value,label])=>statPillHtml(value,label)).join("");
     }
+    /**
+     * @brief Return inline SVG for small toolbar/action icons.
+     * @param {string} name Icon key used by render helpers.
+     * @returns {string} SVG markup or an empty string.
+     */
     function buttonIcon(name){
       const icons = {
         browse: `<svg class="buttonIcon" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 7h6l2 3h10v9H3z"/><path d="M3 7v12"/></svg>`,
@@ -336,8 +341,10 @@
       bindQueueDrag(videoQueueListEl, moveVideoQueueItem);
     }
     function isIOSDevice(){return /iPad|iPhone|iPod/.test(navigator.userAgent)||(navigator.platform==="MacIntel"&&navigator.maxTouchPoints>1);}
+    /** @brief Disable WebAudio visualizer on iOS so lock-screen playback works. */
     function visualizerAllowed(){return !isIOSDevice();}
     // Audio visualizer. iOS disables this so lock-screen playback keeps working.
+    /** @brief Ordered visualizer modes cycled by clicking the Now Playing canvas. */
     function visualizerModes(){return ["bars","wave","dots","mirror","ring","mountain","orbit","rain"];}
     function setVisualizerMode(mode){const modes=visualizerModes(); visualizerMode=modes.includes(mode)?mode:"bars"; localStorage.setItem("visualizerMode",visualizerMode); const canvas=byId("nowPlayingVisualizer"); if(canvas)canvas.title=`Visualizer: ${visualizerMode}. Click to switch.`;}
     function cycleVisualizerMode(){const modes=visualizerModes(); const next=modes[(modes.indexOf(visualizerMode)+1)%modes.length]; setVisualizerMode(next); clearVisualizer("nowPlayingVisualizer"); if(!player.paused&&!player.ended)requestAnimationFrame(startVisualizer);}
@@ -357,6 +364,7 @@
     function drawMountain(canvas, count){const state=prepVisualizer(canvas); if(!state)return; const {ctx,width,height}=state; const ground=height*.9; const gradient=ctx.createLinearGradient(0,height*.12,0,ground); gradient.addColorStop(0,"rgba(156,196,255,.55)"); gradient.addColorStop(.55,"rgba(63,111,216,.26)"); gradient.addColorStop(1,"rgba(63,111,216,.02)"); ctx.fillStyle=gradient; ctx.beginPath(); ctx.moveTo(0,ground); for(let i=0;i<count;i++){const start=Math.floor((i/count)*visualizerData.length*.72); const end=Math.max(start+1,Math.floor(((i+1)/count)*visualizerData.length*.72)); const value=visualizerValue(start,end); const x=(i/(count-1))*width; const y=ground-value*height*.78-Math.sin(i*.5+performance.now()/500)*height*.035; ctx.lineTo(x,y);} ctx.lineTo(width,ground); ctx.closePath(); ctx.fill();}
     function drawOrbit(canvas, count){const state=prepVisualizer(canvas); if(!state)return; const {ctx,dpr,width,height}=state; const cx=width/2, cy=height/2; let bass=0; for(let i=0;i<10&&i<visualizerData.length;i++)bass+=visualizerData[i]; bass=bass/Math.min(10,visualizerData.length)/255; const base=Math.min(width,height)*(.18+bass*.18), time=performance.now()/900; for(let i=0;i<count;i++){const start=Math.floor((i/count)*visualizerData.length*.72); const end=Math.max(start+1,Math.floor(((i+1)/count)*visualizerData.length*.72)); const value=visualizerValue(start,end); const angle=(i/count)*Math.PI*2+time*(i%2?1:-.7); const radius=base+value*height*.23; ctx.fillStyle=`rgba(141,183,255,${.18+value*.65})`; ctx.beginPath(); ctx.arc(cx+Math.cos(angle)*radius,cy+Math.sin(angle)*radius,Math.max(2*dpr,5*dpr*value),0,Math.PI*2); ctx.fill();}}
     function drawRain(canvas, count){const state=prepVisualizer(canvas); if(!state)return; const {ctx,dpr,width,height}=state; const time=performance.now()/38; for(let i=0;i<count;i++){const start=Math.floor((i/count)*visualizerData.length*.72); const end=Math.max(start+1,Math.floor(((i+1)/count)*visualizerData.length*.72)); const value=visualizerValue(start,end); const x=(i+.5)*(width/count); const drops=Math.max(1,Math.round(value*4)); for(let d=0;d<drops;d++){const y=(time*(.45+value)+i*17+d*29)%height; ctx.fillStyle=`rgba(141,183,255,${.12+value*.55})`; fillRounded(ctx,x-1.5*dpr,y,3*dpr,Math.max(5*dpr,18*dpr*value),2*dpr);}}}
+    /** @brief Draw the active Now Playing visualizer frame. */
     function drawVisualizers(){visualizerFrame=null; if(player.paused||player.ended){stopVisualizer(); return;} const big=byId("nowPlayingVisualizer"); if(big){if(visualizerMode==="wave")drawWave(big,44); else if(visualizerMode==="dots")drawDots(big,32); else if(visualizerMode==="mirror")drawMirror(big,32); else if(visualizerMode==="ring")drawRing(big,48); else if(visualizerMode==="mountain")drawMountain(big,48); else if(visualizerMode==="orbit")drawOrbit(big,28); else if(visualizerMode==="rain")drawRain(big,40); else drawBars(big,32);} visualizerFrame=requestAnimationFrame(drawVisualizers);}
     // Edit mode writes directly to MP3/FLAC files, so keep these handlers boring.
     function field(name,label,t){return `<label>${label}<input name="${name}" value="${esc(t[name]||"")}"></label>`;}
@@ -368,6 +376,7 @@
     async function bulkSave(){const values={artist:bulkArtist.value, album:bulkAlbum.value, albumartist:bulkAlbumArtist.value, date:bulkDate.value, genre:bulkGenre.value}; const result=await fetchJson("/api/bulk/metadata",{method:"POST",headers:editHeaders({"Content-Type":"application/json"}),body:JSON.stringify({ids:[...selectedIds],values})}); if(!result.ok){alert(result.error||"Bulk save failed"); return;} const changed=result.results.filter(r=>r.ok).length; selectedIds.clear(); alert(`Bulk save complete for ${changed} files. Selection cleared.`); await loadTracks(false, selectedId);}
     // Music queue and playback. The queue is just an ordered list of track IDs.
     function shuffle(list){const copy=[...list]; for(let i=copy.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1)); [copy[i],copy[j]]=[copy[j],copy[i]];} return copy;}
+    /** @brief Replace the music queue and start playback at the requested track. */
     function playList(list, randomize=false, startId=null){const playable=randomize?shuffle(list):[...list]; if(!playable.length)return; queue=playable.map(t=>t.id); queueIndex=startId===null?0:Math.max(0,queue.indexOf(startId)); playQueueIndex(queueIndex);}
     // When a track is opened from an album page, Next should continue through
     // the album and then later albums in the current browse order.
@@ -403,6 +412,7 @@
         });
       });
     }
+    /** @brief Render the draggable music queue drawer. */
     function renderQueue(){
       queueSummaryEl.textContent = `${queue.length} track${queue.length===1?"":"s"} - ${queueDurationText()}`;
       queueListEl.innerHTML = queue.length
@@ -424,35 +434,45 @@
       bindQueueDrag(queueListEl, moveQueueItem);
     }
     function updateMusicQueueLabels(){topQueueLabelEl.innerHTML=`${buttonIcon("queue")}<span>${queue.length}</span>`;}
+    /** @brief Remaining-time label for the full Now Playing screen. */
     function nowPlayingRemainingText(){
       return Number.isFinite(player.duration)
         ? `-${fmt(Math.max(0, player.duration - player.currentTime))}`
         : durationEl.textContent;
     }
+    /** @brief Artwork block for Now Playing, falling back to a text placeholder. */
     function nowPlayingArtworkHtml(t){
       return t.has_artwork
         ? `<img class="nowPlayingArt" src="${t.artwork_url}" alt="">`
         : `<div class="nowPlayingArt">No Artwork</div>`;
     }
+    /** @brief Title, album, artist, year, and format line for Now Playing. */
     function nowPlayingMetaHtml(t){
       const year = String(t.date || "").slice(0, 4);
       const format = String(t.format || "").toUpperCase();
       return `<div class="nowPlayingText"><div class="nowPlayingTitle">${esc(t.title)}</div><div class="nowPlayingMeta">${esc(t.album || "No album")} - ${esc(t.artist || "Unknown artist")}${year ? ` - ${esc(year)}` : ""}${format ? ` - ${esc(format)}` : ""}</div></div>`;
     }
+    /** @brief Optional visualizer canvas; omitted on iOS. */
     function nowPlayingVisualizerHtml(){
       return visualizerAllowed()
         ? `<canvas id="nowPlayingVisualizer" class="nowPlayingVisualizer" width="560" height="96" aria-hidden="true" title="Visualizer: ${esc(visualizerMode)}. Click to switch."></canvas>`
         : "";
     }
+    /** @brief Seek bar plus elapsed/remaining labels for Now Playing. */
     function nowPlayingSeekHtml(){
       return `<div class="nowPlayingSeek"><input id="npSeekBar" type="range" min="0" max="1000" value="${esc(seekBar.value)}"><span id="npCurrentTime">${esc(currentTimeEl.textContent)}</span><span id="npDuration">${esc(nowPlayingRemainingText())}</span></div>`;
     }
+    /** @brief Previous/play/next controls and desktop volume for Now Playing. */
     function nowPlayingControlsHtml(){
       const playIcon = player.paused ? "&#9654;" : "&#10074;&#10074;";
       return `<div class="nowPlayingControls"><div class="nowPlayingTransport"><button id="npPrev" class="secondary iconControl" title="Previous" aria-label="Previous">&#9664;&#9664;</button><button id="npPlayPause" class="playButton iconControl" title="Play/Pause" aria-label="Play/Pause">${playIcon}</button><button id="npNext" class="secondary iconControl" title="Next" aria-label="Next">&#9654;&#9654;</button></div><label class="nowPlayingVolume"><span>Vol</span><input id="npVolumeBar" type="range" min="0" max="1" step="0.01" value="${esc(player.volume)}"></label></div>`;
     }
     // Full-screen Now Playing is rebuilt from current state so it stays in sync
     // with seek time, volume, visualizer mode, and file format.
+    /**
+     * @brief Render the full-screen Now Playing panel.
+     * @param {object|null} t Current track record, or null when nothing is playing.
+     */
     function renderNowPlaying(t){
       if(!nowPlayingBodyEl)return;
       if(!t){
@@ -469,6 +489,7 @@
       ].join("");
       bindNowPlayingControls();
     }
+    /** @brief Bind controls inside the freshly rendered Now Playing panel. */
     function bindNowPlayingControls(){
       const npSeek=byId("npSeekBar"), npVolume=byId("npVolumeBar"), canvas=byId("nowPlayingVisualizer");
       if(canvas)on(canvas,"click",cycleVisualizerMode);
@@ -561,6 +582,7 @@
     function bindTabsAndSearch(){on(musicTabEl,"click",()=>setMediaType("music")); on(videoTabEl,"click",()=>setMediaType("video")); on(interviewsTabEl,"click",()=>setMediaType("interviews")); on(healthTabEl,"click",()=>setMediaType("health")); on(searchEl,"input",renderCurrentMedia); on(byId("refresh"),"click",()=>loadTracks(true,selectedId)); on(window,"resize",setDeviceClass);}
     function bindVideoControls(){on(videoSortEl,"change",()=>{videoSort=videoSortEl.value; localStorage.setItem("videoSort",videoSort); renderVideoAll();}); on(byId("prevVideo"),"click",()=>playVideoQueueIndex(videoQueueIndex-1)); on(byId("nextVideo"),"click",()=>playVideoQueueIndex(videoQueueIndex+1)); on(byId("playShownVideo"),"click",()=>playVideoList(videoFiltered())); on(byId("shuffleShownVideo"),"click",()=>playVideoList(videoFiltered(),true)); on(byId("videoQueueToggle"),"click",()=>{toggleOpen(videoQueueDrawerEl); renderVideoQueue();}); on(byId("closeVideoQueue"),"click",()=>setOpen(videoQueueDrawerEl,false)); on(byId("clearVideoQueue"),"click",()=>{videoQueue=[]; videoQueueIndex=-1; updateVideoQueueLabel(); renderVideoQueue();}); on(byId("shuffleVideoQueue"),"click",()=>{const current=videoQueue[videoQueueIndex]; videoQueue=shuffle(videoQueue.map(id=>videos.find(v=>v.id===id)).filter(Boolean)).map(v=>v.id); videoQueueIndex=current===undefined?-1:videoQueue.indexOf(current); updateVideoQueueLabel(); renderVideoQueue();}); on(videoPlayerEl,"ended",()=>{if(videoQueueIndex+1<videoQueue.length) playVideoQueueIndex(videoQueueIndex+1);});}
     function bindQueueControls(){on(byId("closeQueue"),"click",()=>setOpen(queueDrawerEl,false)); on(byId("clearQueue"),"click",()=>{queue=[]; queueIndex=-1; player.pause(); playingId=null; updateNow(); renderQueue();}); on(byId("shuffleQueue"),"click",()=>{const current=queue[queueIndex]; queue=shuffle(queue.map(id=>tracks.find(t=>t.id===id)).filter(Boolean)).map(t=>t.id); queueIndex=current===undefined?-1:queue.indexOf(current); updateNow(); renderQueue();});}
+    /** @brief Wire mini-player, audio element events, and Now Playing sync. */
     function bindAudioPlayer(){
       on(byId("prevBtn"),"click",()=>playQueueIndex(queueIndex-1));
       on(byId("nextBtn"),"click",()=>playQueueIndex(queueIndex+1));

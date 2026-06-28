@@ -4,6 +4,7 @@ __pycache__/
 *.log
 *_cache.json
 taeyeon_media_player_cache/
+docs/doxygen/
 
 # Local config. Keep the example config tracked.
 taeyeon_media_player_config.json

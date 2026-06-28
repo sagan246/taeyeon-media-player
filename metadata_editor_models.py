@@ -5,6 +5,8 @@ from dataclasses import dataclass
 
 @dataclass
 class Track:
+    """! @brief Audio track record returned by /api/tracks."""
+
     id: int
     path: str
     filename: str
@@ -27,6 +29,8 @@ class Track:
 
 @dataclass
 class Video:
+    """! @brief Video file or video-folder item returned by /api/videos."""
+
     id: int
     path: str
     filename: str
@@ -45,6 +49,8 @@ class Video:
 
 @dataclass
 class Interview:
+    """! @brief Plain-text interview record returned by /api/interviews."""
+
     id: int
     path: str
     filename: str
@@ -52,4 +58,3 @@ class Interview:
     year: str
     source: str
     content: str
-
