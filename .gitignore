@@ -1,0 +1,38 @@
+# Local/generated state
+__pycache__/
+*.py[cod]
+*.log
+*_cache.json
+taeyeon_media_player_cache/
+
+# Local config. Keep the example config tracked.
+taeyeon_media_player_config.json
+!taeyeon_media_player_config.example.json
+
+# Large bundled/runtime dependencies
+vendor/
+
+# Media libraries should stay outside git.
+media/
+Music/
+Video/
+artwork/
+*.flac
+*.mp3
+*.m4a
+*.aac
+*.wav
+*.mp4
+*.mkv
+*.mov
+*.m2ts
+*.jpg
+*.jpeg
+*.png
+*.webp
+
+# OS/editor noise
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
