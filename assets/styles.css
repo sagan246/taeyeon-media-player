@@ -608,9 +608,10 @@
       .mobileAlbumRow td { padding:8px 10px; background:var(--soft); color:var(--muted); font-size:12px; font-weight:800; text-transform:uppercase; letter-spacing:.04em; }
       .rowBadges { display:none; }
       .nowPlayingDrawer { padding-top:28px; }
-      .nowPlayingHead { top:12px; right:12px; left:auto; width:44px; }
+      .nowPlayingHead { top:12px; right:max(4px, env(safe-area-inset-right)); left:auto; width:44px; }
       body.music.albumSelected #showAllAlbums { top:12px; right:12px; left:auto; }
       .nowPlayingBody { grid-template-columns:1fr; grid-template-areas:"art" "text" "viz" "seek" "controls" "lyrics"; max-width:560px; column-gap:0; }
+      .nowPlayingBody .nowPlayingArt { width:100vw; max-width:none; margin-left:calc(50% - 50vw); }
       .nowPlayingControls { display:flex; justify-content:center; align-items:center; gap:8px; }
       .nowPlayingQueueButton { display:none; }
       body.music.albumSelected .albumActions #albumQueue { display:none; }

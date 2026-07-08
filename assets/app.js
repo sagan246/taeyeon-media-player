@@ -46,6 +46,7 @@
     let restoredMusicState = false, lastQueueSaveAt = 0;
     let restoredVideoState = false, restoringVideoStateNow = false, lastVideoSaveAt = 0;
     let listeningStats = null, statsSession = null, lastStatsSentAt = 0;
+    const STATS_MIN_SECONDS_TO_RECORD = 5;
     let audioContext = null, analyserNode = null, audioSourceNode = null, visualizerData = null, visualizerFrame = null, visualizerMode = localStorage.getItem("visualizerMode") || "rain";
     const selectedIds = new Set();
     const MEDIA_TYPES = ["music", "video", "health", "interviews", "statsPage"];
@@ -931,7 +932,7 @@
     }
     function resetStatsSession(trackId=playingId){
       const t=tracks.find(x=>x.id===trackId);
-      statsSession=t?{trackId:t.id,lastTime:Number.isFinite(player.currentTime)?player.currentTime:0,pendingSeconds:0,playCounted:false}:null;
+      statsSession=t?{trackId:t.id,lastTime:Number.isFinite(player.currentTime)?player.currentTime:0,pendingSeconds:0,listenedSeconds:0,playCounted:false}:null;
       lastStatsSentAt=Date.now();
     }
     function playCountThreshold(){
@@ -943,7 +944,7 @@
       const t=tracks.find(x=>x.id===statsSession.trackId);
       if(!t)return;
       const seconds=Math.max(0,statsSession.pendingSeconds);
-      if(seconds<1&&!countPlay&&!force)return;
+      if(!countPlay && seconds<STATS_MIN_SECONDS_TO_RECORD)return;
       statsSession.pendingSeconds=0;
       postListeningStats({track:statsTrackPayload(t),seconds,count_play:countPlay});
       if(mediaType==="statsPage")loadListeningStats();
@@ -955,8 +956,11 @@
       const current=Number(player.currentTime)||0;
       const delta=current-statsSession.lastTime;
       statsSession.lastTime=current;
-      if(delta>0&&delta<8)statsSession.pendingSeconds+=delta;
-      const countPlay=!statsSession.playCounted&&current>=playCountThreshold();
+      if(delta>0&&delta<8){
+        statsSession.pendingSeconds+=delta;
+        statsSession.listenedSeconds+=delta;
+      }
+      const countPlay=!statsSession.playCounted&&statsSession.listenedSeconds>=playCountThreshold();
       if(countPlay)statsSession.playCounted=true;
       if(countPlay||statsSession.pendingSeconds>=15||Date.now()-lastStatsSentAt>30000){
         lastStatsSentAt=Date.now();
@@ -1051,50 +1055,36 @@
     function statsSummaryCards(summary){
       return `<div class="statsGrid">${[
         statsCard(fmtDuration(summary.seconds||0), "listened this range"),
-        statsCard(summary.plays||0, "plays this range"),
         statsCard(fmtDuration(summary.lifetime_seconds||0), "all-time listening"),
-        statsCard(summary.lifetime_plays||0, "all-time plays"),
       ].join("")}</div>`;
     }
     function statsTableSection(title, rows, columns, emptyText){
       return `<section class="statsSection"><h3>${esc(title)}</h3>${statsRows(rows, columns, emptyText)}</section>`;
     }
-    function statsTables({daily, songs, albums, recent}){
+    function fmtStatsSongTime(seconds){
+      if(!Number.isFinite(Number(seconds))||Number(seconds)<=0)return "0:00";
+      const total=Math.round(Number(seconds));
+      const hours=Math.floor(total/3600), minutes=Math.floor((total%3600)/60), secs=total%60;
+      return hours?`${hours}h ${minutes}m ${String(secs).padStart(2,"0")}s`:`${minutes}:${String(secs).padStart(2,"0")}`;
+    }
+    function statsTables(songs){
+      const orderedSongs = [...songs].sort((a,b)=>(Number(b.seconds)||0)-(Number(a.seconds)||0));
+      const shownSongs = isMobileLayout() ? orderedSongs.slice(0,8) : orderedSongs;
       return `<div class="statsSections">${
-        statsTableSection("Listening Time", daily, [
-          {label:"Day", render:r=>esc(r.day)},
-          {label:"Time", render:r=>esc(fmtDuration(r.seconds))},
-          {label:"Plays", render:r=>esc(r.plays||0)},
-          {label:"Top", render:r=>`<div class="statsTitle">${esc(r.top_song||"")}</div><div class="statsSub">${esc(r.top_album||"")}</div>`},
-        ], "No listening time recorded yet.")
-      }${
-        statsTableSection("Top Songs", songs, [
+        statsTableSection("Top Songs", shownSongs, [
           {label:"Song", render:r=>`<div class="statsTitle">${esc(r.title)}</div><div class="statsSub">${esc(r.artist)} - ${esc(r.album)}</div>`},
-          {label:"Plays", render:r=>esc(r.plays||0)},
-          {label:"Time", render:r=>esc(fmtDuration(r.seconds))},
+          {label:"Time", render:r=>esc(fmtStatsSongTime(r.seconds))},
         ], "No top songs yet.")
-      }${
-        statsTableSection("Top Albums", albums, [
-          {label:"Album", render:r=>`<div class="statsTitle">${esc(r.album)}</div>`},
-          {label:"Plays", render:r=>esc(r.plays||0)},
-          {label:"Time", render:r=>esc(fmtDuration(r.seconds))},
-        ], "No top albums yet.")
-      }${
-        statsTableSection("Recently Played", recent, [
-          {label:"Song", render:r=>`<div class="statsTitle">${esc(r.title)}</div><div class="statsSub">${esc(r.artist)} - ${esc(r.album)}</div>`},
-          {label:"Plays", render:r=>esc(r.play_count||0)},
-          {label:"Last", render:r=>esc(r.last_played||"")},
-        ], "Nothing played yet.")
       }</div>`;
     }
     function renderListeningStats(){
       const data=listeningStats;
       if(!data){listeningStatsPanelEl.innerHTML=`<div class="statsEmpty">Loading listening stats...</div>`; return;}
       const summary=data.summary||{};
-      const daily=data.daily||[], chartDaily=data.chart_daily||[...daily].reverse(), songs=data.top_songs||[], albums=data.top_albums||[], recent=data.recent||[];
+      const chartDaily=data.chart_daily||[], songs=data.top_songs||[];
       const chartUnit=data.chart_unit||"day";
       const chartHtml = statsPeriod === "all" ? "" : statsTimeChart(chartDaily, chartUnit);
-      listeningStatsPanelEl.innerHTML=`${statsHero(statsRangeOptions())}${statsSummaryCards(summary)}${statsTables({daily,songs,albums,recent})}${chartHtml}`;
+      listeningStatsPanelEl.innerHTML=`${statsHero(statsRangeOptions())}${statsSummaryCards(summary)}${chartHtml}${statsTables(songs)}`;
       bindStatsControls();
     }
     function bindStatsControls(){

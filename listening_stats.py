@@ -124,6 +124,7 @@ class ListeningStats:
 
         now_value = datetime.now().replace(microsecond=0)
         now = now_value.isoformat(sep=" ")
+        last_played = now if play_increment else None
         day = now_value.date().isoformat()
         hour = now_value.hour
         with self.lock, closing(self.connect()) as db:
@@ -141,7 +142,7 @@ class ListeningStats:
                         format=excluded.format,
                         play_count=play_count + excluded.play_count,
                         total_seconds=total_seconds + excluded.total_seconds,
-                        last_played=excluded.last_played
+                        last_played=COALESCE(excluded.last_played, last_played)
                     """,
                     (
                         track_key,
@@ -152,7 +153,7 @@ class ListeningStats:
                         track["format"],
                         play_increment,
                         seconds,
-                        now,
+                        last_played,
                     ),
                 )
                 db.execute(
@@ -221,7 +222,7 @@ class ListeningStats:
 
     def empty_day(self, day_text: str) -> dict[str, Any]:
         """! @brief Build the zero-value daily row used by charts."""
-        return {"day": day_text, "seconds": 0.0, "plays": 0, "top_song": "", "top_album": ""}
+        return {"day": day_text, "seconds": 0.0}
 
     def chart_days(
         self, period: str, daily: dict[str, dict[str, Any]], start_text: str | None = None, end_text: str | None = None
@@ -244,13 +245,12 @@ class ListeningStats:
 
     def chart_hours(self, rows: list[sqlite3.Row]) -> list[dict[str, Any]]:
         """! @brief Return hourly totals for a single-day chart."""
-        hourly = {hour: {"hour": hour, "label": f"{hour:02d}:00", "seconds": 0.0, "plays": 0} for hour in range(24)}
+        hourly = {hour: {"hour": hour, "label": f"{hour:02d}:00", "seconds": 0.0} for hour in range(24)}
         for row in rows:
             hour = int(row["hour"] or 0)
             if hour not in hourly:
                 continue
             hourly[hour]["seconds"] += float(row["seconds"] or 0)
-            hourly[hour]["plays"] += int(row["play_count"] or 0)
         return list(hourly.values())
 
     def custom_range(self, start_text: str | None, end_text: str | None) -> tuple[str | None, str | None]:
@@ -321,12 +321,8 @@ class ListeningStats:
             else:
                 rows = db.execute("SELECT * FROM daily_track_stats ORDER BY day DESC, seconds DESC").fetchall()
             lifetime = db.execute(
-                "SELECT COALESCE(SUM(total_seconds),0) seconds, COALESCE(SUM(play_count),0) plays FROM track_stats"
+                "SELECT COALESCE(SUM(total_seconds),0) seconds FROM track_stats"
             ).fetchone()
-            recent = db.execute(
-                "SELECT title, artist, album, play_count, total_seconds, last_played FROM track_stats "
-                "WHERE last_played IS NOT NULL ORDER BY last_played DESC LIMIT 8"
-            ).fetchall()
             hourly_rows = []
             if start and end and start == end:
                 hourly_rows = db.execute(
@@ -336,39 +332,24 @@ class ListeningStats:
 
         daily: dict[str, dict[str, Any]] = {}
         songs: dict[str, dict[str, Any]] = {}
-        albums: dict[str, dict[str, Any]] = {}
         for row in rows:
             day = row["day"]
             daily.setdefault(day, self.empty_day(day))
             daily[day]["seconds"] += float(row["seconds"] or 0)
-            daily[day]["plays"] += int(row["play_count"] or 0)
-            if not daily[day]["top_song"]:
-                daily[day]["top_song"] = row["title"]
-                daily[day]["top_album"] = row["album"]
 
             song = songs.setdefault(
                 row["track_key"],
-                {"title": row["title"], "artist": row["artist"], "album": row["album"], "seconds": 0.0, "plays": 0},
+                {"title": row["title"], "artist": row["artist"], "album": row["album"], "seconds": 0.0},
             )
             song["seconds"] += float(row["seconds"] or 0)
-            song["plays"] += int(row["play_count"] or 0)
-
-            album = albums.setdefault(row["album"], {"album": row["album"], "seconds": 0.0, "plays": 0})
-            album["seconds"] += float(row["seconds"] or 0)
-            album["plays"] += int(row["play_count"] or 0)
 
         return {
             "period": period,
             "summary": {
                 "seconds": sum(item["seconds"] for item in daily.values()),
-                "plays": sum(item["plays"] for item in daily.values()),
                 "lifetime_seconds": float(lifetime["seconds"] or 0),
-                "lifetime_plays": int(lifetime["plays"] or 0),
             },
             "chart_unit": "hour" if start and end and start == end else "day",
             "chart_daily": self.chart_hours(hourly_rows) if start and end and start == end else self.chart_days(period, daily, start, end),
-            "daily": sorted(daily.values(), key=lambda item: item["day"], reverse=True),
-            "top_songs": sorted(songs.values(), key=lambda item: (item["plays"], item["seconds"]), reverse=True)[:12],
-            "top_albums": sorted(albums.values(), key=lambda item: (item["plays"], item["seconds"]), reverse=True)[:12],
-            "recent": [dict(row) for row in recent],
+            "top_songs": sorted(songs.values(), key=lambda item: item["seconds"], reverse=True)[:10],
         }
