@@ -6,7 +6,6 @@ runtime/
 *.jsonl
 *.sqlite3
 *_cache.json
-taeyeon_media_player_cache/
 media_player_cache/
 docs/doxygen/
 tools/doxygen-*

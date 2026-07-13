@@ -488,8 +488,9 @@ def scan_interviews(interviews_dir: Path) -> list[Interview]:
 def clean_interview_title(title: str) -> str:
     """! @brief Remove translator/source tags from interview display titles."""
     cleaned = title.replace("_", " ")
-    # 309KTYSS is a translator/source credit, not part of the interview name.
-    cleaned = re.sub(r"\b309KTYSS\b", "", cleaned, flags=re.IGNORECASE)
+    # Some text archives include compact source/translator credits in the file
+    # name. Drop those display-only tokens while leaving normal words intact.
+    cleaned = re.sub(r"\b\d{2,}[A-Za-z]{2,}\b", "", cleaned)
     cleaned = re.sub(r"\s{2,}", " ", cleaned)
     return cleaned.strip(" -_")
 
