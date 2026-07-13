@@ -16,10 +16,10 @@ from pathlib import Path
 from urllib.parse import parse_qs, urlparse
 
 
-SCRIPT_DIR = Path(__file__).resolve().parent
-REPO_DIR = SCRIPT_DIR.parents[1]
+APP_ROOT = Path(__file__).resolve().parents[2]
+REPO_DIR = APP_ROOT.parents[1]
 DEFAULT_MEDIA_DIR = REPO_DIR / "media"
-VENDOR_DIR = SCRIPT_DIR / "vendor"
+VENDOR_DIR = APP_ROOT / "vendor"
 if VENDOR_DIR.exists():
     sys.path.insert(0, str(VENDOR_DIR))
 

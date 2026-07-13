@@ -107,3 +107,7 @@ More detail:
 - [Design Notes](docs/DESIGN.md)
 - [Architecture](docs/ARCHITECTURE.md)
 - [Security](SECURITY.md)
+
+## License
+
+MIT. See [LICENSE](LICENSE).

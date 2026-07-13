@@ -1,6 +1,7 @@
 # Local/generated state
 __pycache__/
 *.py[cod]
+runtime/
 *.log
 *.jsonl
 *.sqlite3

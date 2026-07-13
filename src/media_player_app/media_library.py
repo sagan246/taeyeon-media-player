@@ -9,13 +9,14 @@ from dataclasses import dataclass
 from pathlib import Path
 from urllib.parse import quote
 
-from metadata_browser import AUDIO_EXTENSIONS, Artwork, read_artwork, read_metadata
-from media_models import Interview, Track, Video
+from .metadata_browser import AUDIO_EXTENSIONS, Artwork, read_artwork, read_metadata
+from .media_models import Interview, Track, Video
 
 
-SCRIPT_DIR = Path(__file__).resolve().parent
-SCAN_CACHE_PATH = SCRIPT_DIR / "media_player_scan_cache.json"
-CACHE_DIR = SCRIPT_DIR / "media_player_cache"
+APP_ROOT = Path(__file__).resolve().parents[2]
+RUNTIME_DIR = APP_ROOT / "runtime"
+SCAN_CACHE_PATH = RUNTIME_DIR / "media_player_scan_cache.json"
+CACHE_DIR = RUNTIME_DIR / "media_player_cache"
 ARTWORK_CACHE_DIR = CACHE_DIR / "artwork"
 SCAN_CACHE_VERSION = 1
 VIDEO_EXTENSIONS = {".mp4", ".m4v", ".mov", ".webm", ".mkv", ".avi", ".wmv", ".m2ts", ".mts", ".ts"}

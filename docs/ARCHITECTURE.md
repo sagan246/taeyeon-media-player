@@ -5,25 +5,36 @@ The app is a Python web server with a plain HTML/CSS/JavaScript frontend.
 ```text
 Browser UI
   -> media_player.py
-  -> media_library.py
-  -> media_models.py
+  -> src/media_player_app/media_player.py
+  -> src/media_player_app/media_library.py
+  -> src/media_player_app/media_models.py
 
 Metadata writes:
-Browser UI -> media_player.py -> metadata_tag_tools.py -> MP3/FLAC files
+Browser UI -> media_player.py -> src/media_player_app/metadata_tag_tools.py -> MP3/FLAC files
 
 Stats:
-Browser UI -> media_player.py -> listening_stats.py -> SQLite
+Browser UI -> media_player.py -> src/media_player_app/listening_stats.py -> SQLite
 ```
+
+## Repository Layout
+
+- `media_player.py` - command-line entry point.
+- `launcher_gui.py` - GUI launcher entry point.
+- `src/media_player_app/` - Python application package.
+- `assets/` - browser UI, JavaScript, and CSS.
+- `docs/` - project documentation.
+- `windows_commands/` and `mac_commands/` - one-click launchers.
+- `runtime/` - ignored local caches, logs, and SQLite state.
 
 ## Backend
 
-- `media_player.py` - server, routes, APIs, streaming, edit/read-only gates.
-- `media_library.py` - scans music, videos, lyrics, artwork, and text files.
-- `media_models.py` - shared data records.
-- `metadata_tag_tools.py` - MP3/FLAC metadata and artwork writes.
-- `metadata_browser.py` - audio metadata/artwork reading helpers.
-- `listening_stats.py` - playback stats stored in SQLite.
-- `launcher_gui.py` - optional launcher for access modes.
+- `src/media_player_app/media_player.py` - server, routes, APIs, streaming, edit/read-only gates.
+- `src/media_player_app/media_library.py` - scans music, videos, lyrics, artwork, and text files.
+- `src/media_player_app/media_models.py` - shared data records.
+- `src/media_player_app/metadata_tag_tools.py` - MP3/FLAC metadata and artwork writes.
+- `src/media_player_app/metadata_browser.py` - audio metadata/artwork reading helpers.
+- `src/media_player_app/listening_stats.py` - playback stats stored in SQLite.
+- `src/media_player_app/launcher_gui.py` - optional launcher for access modes.
 
 ## Frontend
 
@@ -82,6 +93,7 @@ library scan cache.
 ## Checks
 
 ```powershell
-python -m py_compile media_player.py media_library.py listening_stats.py media_models.py metadata_browser.py metadata_tag_tools.py launcher_gui.py
+$py = @("media_player.py", "launcher_gui.py") + (Get-ChildItem src/media_player_app/*.py)
+python -m py_compile @py
 node --check assets/app.js
 ```
