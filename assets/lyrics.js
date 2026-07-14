@@ -52,9 +52,14 @@
     const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
     const desktopLyrics = window.matchMedia("(min-width: 1100px)").matches;
     const activeCenter = activeLine.offsetTop + activeLine.offsetHeight / 2;
-    const focusRatio = desktopLyrics ? 0.42 : 0.18;
+    // On mobile, anchor the top edge so wrapped lyrics do not climb into the
+    // faded mask. Desktop keeps its centered reading position.
+    const targetTop = Math.max(28, scroller.clientHeight * .09);
+    const scrollTop = desktopLyrics
+      ? activeCenter - scroller.clientHeight * .42
+      : activeLine.offsetTop - targetTop;
     scroller.scrollTo({
-      top: Math.max(0, activeCenter - scroller.clientHeight * focusRatio),
+      top: Math.max(0, scrollTop),
       behavior: forceScroll || reduceMotion || !desktopLyrics ? "auto" : "smooth",
     });
   }

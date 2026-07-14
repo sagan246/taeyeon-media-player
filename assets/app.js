@@ -154,8 +154,6 @@
     const albumGridEl = byId("albumGrid");
     const viewTitleEl = byId("viewTitle");
     const player = byId("player");
-    const nextTrackPreloader = new Audio();
-    nextTrackPreloader.preload = "auto";
     const nowInfoEl = byId("nowInfo");
     const playPauseBtn = byId("playPauseBtn");
     const repeatBtn = byId("repeatBtn");
@@ -391,7 +389,6 @@
       localStorage.setItem("repeatMode",repeatMode);
       saveMusicState({force:true});
       updateRepeatButtons();
-      preloadNextTrack();
     }
     function cycleVideoRepeat(){videoRepeatMode=nextRepeatMode(videoRepeatMode); localStorage.setItem("videoRepeatMode",videoRepeatMode); saveVideoState({force:true}); updateRepeatButtons();}
     function updateRepeatButtons(){updateRepeatButton(repeatBtn, repeatMode); updateRepeatButton(byId("repeatQueue"), repeatMode); updateRepeatButton(videoRepeatBtn, videoRepeatMode, "Video repeat"); updateRepeatButton(byId("repeatVideoQueue"), videoRepeatMode, "Video repeat");}
@@ -439,7 +436,6 @@
       selectTrack(t.id);
       updateNow();
       renderQueue();
-      preloadNextTrack();
       if(mediaType==="music"&&selectedAlbum==="All")renderAlbums();
     }
     function saveVideoState({force=false}={}){
@@ -1037,34 +1033,7 @@
         saveMusicState({force:true});
         updateNow();
         renderQueue();
-        preloadNextTrack();
       }
-    }
-    function queueTrackAt(index){
-      return index>=0&&index<queue.length ? tracks.find(t=>t.id===queue[index]) || null : null;
-    }
-    function nextTrackToPreload(){
-      if(!queue.length||queueIndex<0)return null;
-      if(queueIndex+1<queue.length)return queueTrackAt(queueIndex+1);
-      if(repeatMode==="all")return queueTrackAt(0);
-      return null;
-    }
-    function clearPreloadedTrack(){
-      nextTrackPreloader.removeAttribute("src");
-      nextTrackPreloader.load();
-      nextTrackPreloader.dataset.trackId = "";
-    }
-    // Keep one upcoming track warm so Next/album playback starts quickly,
-    // especially over phone or Cloudflare connections. This is a hint to the
-    // browser, not a second player, so it keeps lock-screen playback stable.
-    function preloadNextTrack(){
-      const nextTrack = nextTrackToPreload();
-      if(!nextTrack||nextTrack.id===playingId){clearPreloadedTrack(); return;}
-      if(nextTrackPreloader.dataset.trackId===String(nextTrack.id)&&nextTrackPreloader.src.endsWith(nextTrack.audio_url))return;
-      nextTrackPreloader.dataset.trackId = String(nextTrack.id);
-      nextTrackPreloader.src = nextTrack.audio_url;
-      nextTrackPreloader.load();
-      console.debug("[audio] preloading next track", {id:nextTrack.id, title:nextTrack.title});
     }
     function playQueueIndex(index, options={}){
       if(index<0||index>=queue.length)return;
@@ -1088,7 +1057,6 @@
       if(options.selectInMusic!==false)selectTrack(t.id);
       requestAnimationFrame(startVisualizer);
       renderQueue();
-      preloadNextTrack();
     }
     function removeQueueIndex(index){
       if(index<0||index>=queue.length)return;
@@ -1105,7 +1073,6 @@
           player.pause();
           player.removeAttribute("src");
           playingId=null;
-          clearPreloadedTrack();
           saveMusicState({force:true});
           updateNow();
           renderRows();
@@ -1114,7 +1081,6 @@
       saveMusicState({force:true});
       updateNow();
       renderQueue();
-      preloadNextTrack();
     }
     function moveQueueItem(fromIndex,toIndex){
       if(fromIndex===toIndex||fromIndex<0||toIndex<0||fromIndex>=queue.length||toIndex>=queue.length)return;
@@ -1125,7 +1091,6 @@
       saveMusicState({force:true});
       updateNow();
       renderQueue();
-      preloadNextTrack();
     }
     function queueDurationText(){const durations=queue.map(id=>knownDurations.get(id)); if(!queue.length||durations.some(v=>!Number.isFinite(v)))return ""; return fmt(durations.reduce((sum,v)=>sum+v,0));}
     // Dragging reorders the queue array, but keeps queueIndex attached to the
@@ -1276,10 +1241,12 @@
         nowPlayingRenderedTrackId = null;
         nowPlayingRenderedArtSrc = "";
         nowPlayingBodyEl.classList.remove("hasLyrics");
+        nowPlayingDrawerEl.classList.remove("hasLyrics");
         nowPlayingBodyEl.innerHTML = nowPlayingComponents.emptyHtml ? nowPlayingComponents.emptyHtml() : "";
         return;
       }
       nowPlayingBodyEl.classList.toggle("hasLyrics", !!t.has_lyrics);
+      nowPlayingDrawerEl.classList.toggle("hasLyrics", !!t.has_lyrics);
       if(nowPlayingRenderedTrackId === t.id && nowPlayingBodyEl.children.length){
         updateNowPlayingControlsOnly();
         return;
@@ -1756,7 +1723,6 @@
         queueIndex=-1;
         player.pause();
         playingId=null;
-        clearPreloadedTrack();
         saveMusicState({force:true});
         updateNow();
         renderQueue();
@@ -1768,7 +1734,6 @@
         saveMusicState({force:true});
         updateNow();
         renderQueue();
-        preloadNextTrack();
       });
     }
     /** @brief Wire mini-player, audio element events, and Now Playing sync. */
