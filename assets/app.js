@@ -42,6 +42,7 @@
       statsTableSection,
     } = statsComponents;
     const themeEngine = window.MediaPlayerThemeEngine || {};
+    const visualizerModule = window.MediaPlayerAudioVisualizer || {};
     const musicDomain = window.MediaPlayerMusicDomain || {};
     const videoDomain = window.MediaPlayerVideoDomain || {};
     const statsDomain = window.MediaPlayerStatsDomain || {};
@@ -132,15 +133,10 @@
     let listeningStats = null, statsSession = null, lastStatsSentAt = 0;
     let statsTopSongTrackIds = [];
     const STATS_MIN_SECONDS_TO_RECORD = 5;
-    let savedVisualizerMode = localStorage.getItem("visualizerMode");
-    if((!savedVisualizerMode || savedVisualizerMode === "rain") && localStorage.getItem("visualizerDefault") !== "bars"){
-      savedVisualizerMode = "bars";
+    if((!localStorage.getItem("visualizerMode") || localStorage.getItem("visualizerMode") === "rain") && localStorage.getItem("visualizerDefault") !== "bars"){
       localStorage.setItem("visualizerMode", "bars");
       localStorage.setItem("visualizerDefault", "bars");
     }
-    // The visualizer uses Web Audio only while the page is visible/playing; on
-    // iPhone lock screen we keep normal audio playback behavior instead.
-    let audioContext = null, analyserNode = null, audioSourceNode = null, visualizerData = null, visualizerFrame = null, visualizerMode = savedVisualizerMode || "bars";
     const selectedIds = new Set();
     const adaptiveThemeCache = new Map();
     const MEDIA_TYPES = ["music", "video", "health", "interviews", "statsPage", "customize"];
@@ -208,6 +204,7 @@
     const healthPanelEl = byId("healthPanel");
     const listeningStatsPanelEl = byId("listeningStatsPanel");
     const themeGridEl = byId("themeGrid");
+    const audioVisualizer = visualizerModule.create({player, byId, themeEngine});
     // Text helpers and library grouping rules.
     function shiftDate(dateText,days){return statsDomain.shiftDate(dateText,days,localDateString);}
     function statsSteppablePeriod(){return ["week","month","year"].includes(statsPeriod);}
@@ -1071,38 +1068,12 @@
       bindQueueList(videoQueueListEl, playVideoQueueIndex, removeVideoQueueIndex);
       bindQueueDrag(videoQueueListEl, moveVideoQueueItem);
     }
-    function isIOSDevice(){return /iPad|iPhone|iPod/.test(navigator.userAgent)||(navigator.platform==="MacIntel"&&navigator.maxTouchPoints>1);}
-    /** @brief Disable WebAudio visualizer on iOS so lock-screen playback works. */
-    function visualizerAllowed(){return !isIOSDevice();}
-    // Audio visualizer. iOS disables this so lock-screen playback keeps working.
-    /** @brief Ordered visualizer modes cycled by clicking the Now Playing canvas. */
-    function visualizerModes(){return ["bars","wave","dots","mirror","ring","mountain","orbit","rain"];}
-    function setVisualizerMode(mode){const modes=visualizerModes(); visualizerMode=modes.includes(mode)?mode:"bars"; localStorage.setItem("visualizerMode",visualizerMode); const canvas=byId("nowPlayingVisualizer"); if(canvas)canvas.title=`Visualizer: ${visualizerMode}. Click to switch.`;}
-    function cycleVisualizerMode(){const modes=visualizerModes(); const next=modes[(modes.indexOf(visualizerMode)+1)%modes.length]; setVisualizerMode(next); clearVisualizer("nowPlayingVisualizer"); if(!player.paused&&!player.ended)requestAnimationFrame(startVisualizer);}
-    function initAudioVisualizer(){if(!visualizerAllowed())return false; if(analyserNode)return true; const Ctx=window.AudioContext||window.webkitAudioContext; if(!Ctx)return false; try{audioContext=new Ctx(); analyserNode=audioContext.createAnalyser(); analyserNode.fftSize=128; analyserNode.smoothingTimeConstant=.78; visualizerData=new Uint8Array(analyserNode.frequencyBinCount); audioSourceNode=audioContext.createMediaElementSource(player); audioSourceNode.connect(analyserNode); analyserNode.connect(audioContext.destination); return true;}catch(err){console.warn("[audio] visualizer unavailable", err); analyserNode=null; return false;}}
-    function resumeVisualizerContext(){if(!initAudioVisualizer())return Promise.resolve(false); if(audioContext&&audioContext.state==="suspended")return audioContext.resume().then(()=>true).catch(()=>false); return Promise.resolve(true);}
-    function startVisualizer(){resumeVisualizerContext().then(ok=>{if(!ok||visualizerFrame||player.paused||player.ended)return; drawVisualizers();});}
-    function stopVisualizer(){if(visualizerFrame){cancelAnimationFrame(visualizerFrame); visualizerFrame=null;} clearVisualizer("nowPlayingVisualizer");}
-    function clearVisualizer(id){const canvas=byId(id); if(!canvas)return; const ctx=canvas.getContext("2d"); if(!ctx)return; ctx.clearRect(0,0,canvas.width,canvas.height);}
-    function fillRounded(ctx,x,y,width,height,radius){if(ctx.roundRect){ctx.beginPath(); ctx.roundRect(x,y,width,height,radius); ctx.fill();}else{ctx.fillRect(x,y,width,height);}}
-    function prepVisualizer(canvas){const ctx=canvas.getContext("2d"); if(!ctx||!analyserNode||!visualizerData)return null; const rect=canvas.getBoundingClientRect(); const dpr=window.devicePixelRatio||1; const width=Math.max(1,Math.round(rect.width*dpr)), height=Math.max(1,Math.round(rect.height*dpr)); if(canvas.width!==width||canvas.height!==height){canvas.width=width; canvas.height=height;} analyserNode.getByteFrequencyData(visualizerData); ctx.clearRect(0,0,width,height); return {ctx,dpr,width,height};}
-    function visualizerValue(start,end){let sum=0; for(let j=start;j<end;j++)sum+=visualizerData[j]; return sum/(end-start)/255;}
-    function themeCssValue(name, fallback){
-      return themeEngine.themeCssValue ? themeEngine.themeCssValue(name, fallback) : fallback;
-    }
-    function themeColor(name, fallback){return themeCssValue(name, fallback);}
-    function themeRgba(name, fallback, alpha){return `rgba(${themeCssValue(name, fallback)},${alpha})`;}
-    function usingLightTheme(){return [...document.body.classList].some(name=>name.includes("theme-light"));}
-    function drawBars(canvas, count){const state=prepVisualizer(canvas); if(!state)return; const {ctx,dpr,width,height}=state; const gap=Math.max(2*dpr, width/(count*5)); const barWidth=(width-gap*(count-1))/count; for(let i=0;i<count;i++){const start=Math.floor((i/count)*visualizerData.length*.72); const end=Math.max(start+1,Math.floor(((i+1)/count)*visualizerData.length*.72)); const value=visualizerValue(start,end); const barHeight=Math.max(3*dpr, value*height*.92); const x=i*(barWidth+gap); const y=height-barHeight; const gradient=ctx.createLinearGradient(0,y,0,height); gradient.addColorStop(0,themeColor("--accent-link","#8db7ff")); gradient.addColorStop(1,themeColor("--accent","#3f6fd8")); ctx.fillStyle=gradient; fillRounded(ctx,x,y,barWidth,barHeight,Math.min(barWidth/2,4*dpr));}}
-    function drawWave(canvas, count){const state=prepVisualizer(canvas); if(!state)return; const {ctx,dpr,width,height}=state; const mid=height*.55; ctx.lineWidth=3*dpr; ctx.lineCap="round"; const gradient=ctx.createLinearGradient(0,0,width,0); gradient.addColorStop(0,themeColor("--accent","#3f6fd8")); gradient.addColorStop(.5,themeColor("--accent-link","#9cc4ff")); gradient.addColorStop(1,themeColor("--accent","#3f6fd8")); ctx.strokeStyle=gradient; ctx.beginPath(); for(let i=0;i<count;i++){const start=Math.floor((i/count)*visualizerData.length*.72); const end=Math.max(start+1,Math.floor(((i+1)/count)*visualizerData.length*.72)); const value=visualizerValue(start,end); const x=(i/(count-1))*width; const y=mid-Math.sin(i*.55+performance.now()/260)*value*height*.32-value*height*.22; if(i===0)ctx.moveTo(x,y); else ctx.lineTo(x,y);} ctx.stroke();}
-    function drawDots(canvas, count){const state=prepVisualizer(canvas); if(!state)return; const {ctx,dpr,width,height}=state; const cols=count, rows=4, gap=width/(cols+1); for(let i=0;i<cols;i++){const start=Math.floor((i/cols)*visualizerData.length*.72); const end=Math.max(start+1,Math.floor(((i+1)/cols)*visualizerData.length*.72)); const value=visualizerValue(start,end); const lit=Math.max(1,Math.round(value*rows)); for(let row=0;row<rows;row++){const alpha=row<lit?.35+value*.65:.08; ctx.fillStyle=themeRgba("--accent-sheen-rgb","141,183,255",alpha); ctx.beginPath(); ctx.arc((i+1)*gap,height-(row+1)*(height/(rows+1)),Math.max(2.5*dpr,4*dpr*value),0,Math.PI*2); ctx.fill();}}}
-    function drawMirror(canvas, count){const state=prepVisualizer(canvas); if(!state)return; const {ctx,dpr,width,height}=state; const mid=height*.5, gap=Math.max(2*dpr,width/(count*5)), barWidth=(width-gap*(count-1))/count; for(let i=0;i<count;i++){const start=Math.floor((i/count)*visualizerData.length*.72); const end=Math.max(start+1,Math.floor(((i+1)/count)*visualizerData.length*.72)); const value=visualizerValue(start,end); const barHeight=Math.max(2*dpr,value*height*.45); const x=i*(barWidth+gap); const gradient=ctx.createLinearGradient(0,mid-barHeight,0,mid+barHeight); gradient.addColorStop(0,themeRgba("--accent-sheen-rgb","156,196,255",.95)); gradient.addColorStop(.5,themeRgba("--accent-rgb","63,111,216",.45)); gradient.addColorStop(1,themeRgba("--accent-sheen-rgb","156,196,255",.95)); ctx.fillStyle=gradient; fillRounded(ctx,x,mid-barHeight,barWidth,barHeight*2,Math.min(barWidth/2,4*dpr));}}
-    function drawRing(canvas, count){const state=prepVisualizer(canvas); if(!state)return; const {ctx,dpr,width,height}=state; const cx=width/2, cy=height/2, base=Math.min(width,height)*.18; let total=0; for(let i=0;i<visualizerData.length*.72;i++)total+=visualizerData[i]; const avg=total/(visualizerData.length*.72)/255; ctx.lineCap="round"; for(let i=0;i<count;i++){const start=Math.floor((i/count)*visualizerData.length*.72); const end=Math.max(start+1,Math.floor(((i+1)/count)*visualizerData.length*.72)); const value=visualizerValue(start,end); const angle=(i/count)*Math.PI*2+performance.now()/2400; const inner=base+avg*height*.12; const outer=inner+value*height*.26; ctx.strokeStyle=themeRgba("--accent-sheen-rgb","141,183,255",.22+value*.72); ctx.lineWidth=Math.max(2*dpr,3*dpr*value); ctx.beginPath(); ctx.moveTo(cx+Math.cos(angle)*inner,cy+Math.sin(angle)*inner); ctx.lineTo(cx+Math.cos(angle)*outer,cy+Math.sin(angle)*outer); ctx.stroke();} ctx.strokeStyle=themeRgba("--accent-rgb","63,111,216",.28); ctx.lineWidth=1*dpr; ctx.beginPath(); ctx.arc(cx,cy,base+avg*height*.12,0,Math.PI*2); ctx.stroke();}
-    function drawMountain(canvas, count){const state=prepVisualizer(canvas); if(!state)return; const {ctx,width,height}=state; const ground=height*.9; const gradient=ctx.createLinearGradient(0,height*.12,0,ground); gradient.addColorStop(0,themeRgba("--accent-sheen-rgb","156,196,255",.55)); gradient.addColorStop(.55,themeRgba("--accent-rgb","63,111,216",.26)); gradient.addColorStop(1,themeRgba("--accent-rgb","63,111,216",.02)); ctx.fillStyle=gradient; ctx.beginPath(); ctx.moveTo(0,ground); for(let i=0;i<count;i++){const start=Math.floor((i/count)*visualizerData.length*.72); const end=Math.max(start+1,Math.floor(((i+1)/count)*visualizerData.length*.72)); const value=visualizerValue(start,end); const x=(i/(count-1))*width; const y=ground-value*height*.78-Math.sin(i*.5+performance.now()/500)*height*.035; ctx.lineTo(x,y);} ctx.lineTo(width,ground); ctx.closePath(); ctx.fill();}
-    function drawOrbit(canvas, count){const state=prepVisualizer(canvas); if(!state)return; const {ctx,dpr,width,height}=state; const cx=width/2, cy=height/2; let bass=0; for(let i=0;i<10&&i<visualizerData.length;i++)bass+=visualizerData[i]; bass=bass/Math.min(10,visualizerData.length)/255; const base=Math.min(width,height)*(.18+bass*.18), time=performance.now()/900; for(let i=0;i<count;i++){const start=Math.floor((i/count)*visualizerData.length*.72); const end=Math.max(start+1,Math.floor(((i+1)/count)*visualizerData.length*.72)); const value=visualizerValue(start,end); const angle=(i/count)*Math.PI*2+time*(i%2?1:-.7); const radius=base+value*height*.23; ctx.fillStyle=themeRgba("--accent-sheen-rgb","141,183,255",.18+value*.65); ctx.beginPath(); ctx.arc(cx+Math.cos(angle)*radius,cy+Math.sin(angle)*radius,Math.max(2*dpr,5*dpr*value),0,Math.PI*2); ctx.fill();}}
-    function drawRain(canvas, count){const state=prepVisualizer(canvas); if(!state)return; const {ctx,dpr,width,height}=state; const light=usingLightTheme(); const time=performance.now()/38; for(let i=0;i<count;i++){const start=Math.floor((i/count)*visualizerData.length*.72); const end=Math.max(start+1,Math.floor(((i+1)/count)*visualizerData.length*.72)); const value=visualizerValue(start,end); const x=(i+.5)*(width/count); const drops=Math.max(1,Math.round(value*4)); for(let d=0;d<drops;d++){const y=(time*(.45+value)+i*17+d*29)%height; ctx.fillStyle=light?themeRgba("--accent-rgb","63,111,216",.28+value*.62):themeRgba("--accent-sheen-rgb","141,183,255",.12+value*.55); fillRounded(ctx,x-(light?1.75:1.5)*dpr,y,(light?3.5:3)*dpr,Math.max(6*dpr,18*dpr*value),2*dpr);}}}
-    /** @brief Draw the active Now Playing visualizer frame. */
-    function drawVisualizers(){visualizerFrame=null; if(player.paused||player.ended){stopVisualizer(); return;} const big=byId("nowPlayingVisualizer"); if(big){if(visualizerMode==="wave")drawWave(big,44); else if(visualizerMode==="dots")drawDots(big,32); else if(visualizerMode==="mirror")drawMirror(big,32); else if(visualizerMode==="ring")drawRing(big,48); else if(visualizerMode==="mountain")drawMountain(big,48); else if(visualizerMode==="orbit")drawOrbit(big,28); else if(visualizerMode==="rain")drawRain(big,40); else drawBars(big,32);} visualizerFrame=requestAnimationFrame(drawVisualizers);}
+    function visualizerAllowed(){return audioVisualizer.allowed();}
+    function cycleVisualizerMode(){audioVisualizer.cycle();}
+    function resumeVisualizerContext(){return audioVisualizer.resume();}
+    function startVisualizer(){audioVisualizer.start();}
+    function stopVisualizer(){audioVisualizer.stop();}
+    function clearVisualizer(id){audioVisualizer.clear(id);}
     // Edit mode writes directly to MP3/FLAC files, so keep these handlers boring.
     function field(name,label,t){return `<label>${label}<input name="${name}" value="${esc(t[name]||"")}"></label>`;}
     function artworkPanel(t){const supported=["mp3","flac"].includes(String(t.format||"").toLowerCase()); return `<div class="artworkPanel"><strong>Artwork</strong><input id="artworkFile" type="file" accept="image/jpeg,image/png,image/webp" ${supported?"":"disabled"}><img id="artworkPreview" class="artworkPreview" alt=""><div class="actions artworkActions"><button type="button" id="saveSongArt" ${supported?"":"disabled"}>Replace Song Art</button><button type="button" class="secondary" id="saveAlbumArt" ${supported?"":"disabled"}>Replace Album Art</button></div><div class="message" id="artworkMsg">${supported?"MP3/FLAC only. Changes write directly to the file. Album art uses the selected song's album tag.":"Artwork editing is only enabled for MP3 and FLAC."}</div></div>`;}
@@ -1479,7 +1450,7 @@
         track:t,
         artSrc,
         visualizerEnabled:visualizerAllowed(),
-        visualizerMode,
+        visualizerMode:audioVisualizer.currentMode(),
         seekValue:seekBar.value,
         currentTime:currentTimeEl.textContent,
         remainingTime:nowPlayingRemainingText(),

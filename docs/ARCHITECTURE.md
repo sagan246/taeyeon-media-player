@@ -65,6 +65,7 @@ startup independently testable and easier to change without cross-tab drift.
 - `assets/now-playing-components.js` - Now Playing screen.
 - `assets/stats-components.js` - stats screen.
 - `assets/lyrics.js` - text and LRC lyric handling.
+- `assets/audio-visualizer.js` - Web Audio setup, animation lifecycle, and visualizer renderers.
 - `assets/theme-data.js` / `assets/theme-engine.js` - themes.
 
 ## Styles
