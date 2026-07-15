@@ -42,8 +42,14 @@ Browser UI -> media_player.py -> src/media_player_app/playlist_store.py -> runti
 
 ## Frontend
 
+`assets/app.js` coordinates shared state and rendering. Domain modules keep
+music/video persistence, stats date math, playlists, metadata payloads, and app
+startup independently testable and easier to change without cross-tab drift.
+
 - `assets/index.html` - app shell.
-- `assets/app.js` - main state, playback, routing, and event wiring.
+- `assets/app.js` - stateful coordinator, rendering, and event wiring.
+- `assets/*-domain.js` - music/video state, stats ranges, playlists, edit payloads,
+  and startup boundaries.
 - `assets/components.js` - shared UI helpers.
 - `assets/music-components.js` - music rendering.
 - `assets/playlist-components.js` - playlist cards and detail views.
@@ -105,7 +111,7 @@ library scan cache.
 ## Checks
 
 ```powershell
-$py = @("media_player.py", "launcher_gui.py") + (Get-ChildItem src/media_player_app/*.py)
-python -m py_compile @py
-node --check assets/app.js
+python -m compileall -q media_player.py launcher_gui.py src tests
+python -m pytest
+Get-ChildItem assets -Filter *.js | ForEach-Object { node --check $_.FullName }
 ```

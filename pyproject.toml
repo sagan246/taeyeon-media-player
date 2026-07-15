@@ -1,0 +1,33 @@
+[build-system]
+requires = ["setuptools>=69"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "local-web-media-player"
+version = "0.1.0"
+description = "A local-first web player for personal music, video, lyrics, and text libraries."
+readme = "README.md"
+requires-python = ">=3.11"
+license = { file = "LICENSE" }
+dependencies = [
+  "mutagen>=1.47,<2",
+]
+
+[project.optional-dependencies]
+images = ["Pillow>=10,<13"]
+dev = ["pytest>=8,<9"]
+
+[project.scripts]
+media-player = "media_player_app.media_player:main"
+
+[tool.setuptools]
+package-dir = { "" = "src" }
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+addopts = "-q"
+testpaths = ["tests"]
+pythonpath = ["src"]
+

@@ -152,3 +152,7 @@ python media_player.py --media-dir <media-folder> --host 0.0.0.0 --port 8767 --w
 Port `8767` is intended for media read-only sharing. Playlists remain manageable
 unless `playlist_editable` is set to `false`; metadata and embedded artwork stay
 read-only. Keep port `8766` for local metadata editing.
+
+`--media-dir` must resolve to the repository's expected media folder or one of
+its descendants. This restriction prevents the server from being pointed at an
+arbitrary filesystem directory.

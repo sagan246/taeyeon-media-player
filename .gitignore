@@ -1,6 +1,7 @@
 # Local/generated state
 __pycache__/
 *.py[cod]
+*.egg-info/
 runtime/
 *.log
 *.jsonl

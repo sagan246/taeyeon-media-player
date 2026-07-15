@@ -20,6 +20,35 @@ EDITABLE_FIELDS = (
     "tracknumber",
     "genre",
 )
+MAX_METADATA_VALUE_LENGTH = 2000
+
+
+def validate_metadata_payload(payload: object, *, allow_empty_values: bool = True) -> dict[str, str]:
+    """Validate and normalize the browser's editable metadata object.
+
+    Unknown keys are ignored so older/newer clients can coexist. Nested values
+    are rejected because silently stringifying them can write corrupt-looking
+    tags such as ``{'value': 'Song'}`` into a media file.
+    """
+    if not isinstance(payload, dict):
+        raise ValueError("Metadata payload must be a JSON object")
+
+    values: dict[str, str] = {}
+    for field in EDITABLE_FIELDS:
+        if field not in payload:
+            continue
+        raw_value = payload[field]
+        if raw_value is not None and not isinstance(raw_value, (str, int, float)):
+            raise ValueError(f"Metadata field '{field}' must be a text value")
+        value = "" if raw_value is None else str(raw_value).strip()
+        if len(value) > MAX_METADATA_VALUE_LENGTH:
+            raise ValueError(f"Metadata field '{field}' is too long")
+        if value or allow_empty_values:
+            values[field] = value
+
+    if not values:
+        raise ValueError("No editable metadata fields were provided")
+    return values
 
 
 def load_editable_tags(path: Path):
@@ -58,11 +87,7 @@ def save_metadata(path: Path, values: dict[str, str]) -> dict[str, object]:
     Empty values delete existing fields. Unsupported fields are ignored by
     design so UI payloads can include only the known EDITABLE_FIELDS.
     """
-    clean_values = {
-        field: str(values.get(field, "")).strip()
-        for field in EDITABLE_FIELDS
-        if field in values
-    }
+    clean_values = validate_metadata_payload(values)
     tags = load_editable_tags(path)
     changed: list[str] = []
     for field, value in clean_values.items():

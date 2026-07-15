@@ -36,6 +36,19 @@ Media files are **not included** in this repository.
 
 ## Getting Started
 
+Python 3.11 or newer is supported. Install the player and its required audio
+tag library from the repository root:
+
+```bash
+python -m pip install -e .
+```
+
+Install optional image resizing support with:
+
+```bash
+python -m pip install -e ".[images]"
+```
+
 Use the included launcher:
 
 Windows:
@@ -65,6 +78,12 @@ windows_commands/start_player.cmd
 mac_commands/start_player.command
 ```
 
+After installation, the equivalent command-line entry point is:
+
+```bash
+media-player --media-dir <media-folder>
+```
+
 ## Command Line
 
 Editable local mode:
@@ -86,6 +105,9 @@ python media_player.py --media-dir <media-folder> --host 0.0.0.0 --port 8766
 ```text
 http://<lan-address>:8766/
 ```
+
+For safety, `--media-dir` accepts only the repository's expected media folder
+or one of its descendants. It is not a general filesystem browser.
 
 ## Edit Mode
 

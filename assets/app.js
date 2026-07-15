@@ -42,6 +42,11 @@
       statsTableSection,
     } = statsComponents;
     const themeEngine = window.MediaPlayerThemeEngine || {};
+    const musicDomain = window.MediaPlayerMusicDomain || {};
+    const videoDomain = window.MediaPlayerVideoDomain || {};
+    const statsDomain = window.MediaPlayerStatsDomain || {};
+    const playlistDomain = window.MediaPlayerPlaylistDomain || {};
+    const editDomain = window.MediaPlayerEditDomain || {};
 
     // app.js is the stateful coordinator. Stateless markup lives in
     // components.js/stats-components.js so the music, video, queue, and stats
@@ -204,43 +209,17 @@
     const listeningStatsPanelEl = byId("listeningStatsPanel");
     const themeGridEl = byId("themeGrid");
     // Text helpers and library grouping rules.
-    function shiftDate(dateText, days){
-      const date = new Date(`${dateText || localDateString()}T00:00:00`);
-      date.setDate(date.getDate() + days);
-      return localDateString(date);
-    }
+    function shiftDate(dateText,days){return statsDomain.shiftDate(dateText,days,localDateString);}
     function statsSteppablePeriod(){return ["week","month","year"].includes(statsPeriod);}
-    function dateFromText(dateText){return new Date(`${dateText || localDateString()}T00:00:00`);}
-    function monthStart(dateText){
-      const date = dateFromText(dateText);
-      return localDateString(new Date(date.getFullYear(), date.getMonth(), 1));
-    }
-    function monthEnd(dateText){
-      const date = dateFromText(dateText);
-      return localDateString(new Date(date.getFullYear(), date.getMonth() + 1, 0));
-    }
-    function yearStart(dateText){
-      const date = dateFromText(dateText);
-      return localDateString(new Date(date.getFullYear(), 0, 1));
-    }
-    function yearEnd(dateText){
-      const date = dateFromText(dateText);
-      return localDateString(new Date(date.getFullYear(), 11, 31));
-    }
-    function weekStart(dateText){
-      const date = dateFromText(dateText);
-      date.setDate(date.getDate() - date.getDay());
-      return localDateString(date);
-    }
-    function weekEnd(dateText){return shiftDate(weekStart(dateText), 6);}
-    function shiftMonthAnchor(dateText, direction){
-      const date = dateFromText(dateText);
-      return localDateString(new Date(date.getFullYear(), date.getMonth() + direction, 1));
-    }
-    function shiftYearAnchor(dateText, direction){
-      const date = dateFromText(dateText);
-      return localDateString(new Date(date.getFullYear() + direction, 0, 1));
-    }
+    function dateFromText(dateText){return statsDomain.dateFromText(dateText,localDateString);}
+    function monthStart(dateText){return statsDomain.monthStart(dateText,localDateString);}
+    function monthEnd(dateText){return statsDomain.monthEnd(dateText,localDateString);}
+    function yearStart(dateText){return statsDomain.yearStart(dateText,localDateString);}
+    function yearEnd(dateText){return statsDomain.yearEnd(dateText,localDateString);}
+    function weekStart(dateText){return statsDomain.weekStart(dateText,localDateString);}
+    function weekEnd(dateText){return statsDomain.weekEnd(dateText,localDateString);}
+    function shiftMonthAnchor(dateText,direction){return statsDomain.shiftMonthAnchor(dateText,direction,localDateString);}
+    function shiftYearAnchor(dateText,direction){return statsDomain.shiftYearAnchor(dateText,direction,localDateString);}
     function statsCurrentRangeStart(period=statsPeriod){
       const today = localDateString();
       if(period==="week")return weekStart(today);
@@ -419,7 +398,7 @@
     function cycleVideoRepeat(){videoRepeatMode=nextRepeatMode(videoRepeatMode); localStorage.setItem("videoRepeatMode",videoRepeatMode); saveVideoState({force:true}); updateRepeatButtons();}
     function updateRepeatButtons(){updateRepeatButton(repeatBtn, repeatMode); updateRepeatButton(byId("repeatQueue"), repeatMode); updateRepeatButton(videoRepeatBtn, videoRepeatMode, "Video repeat"); updateRepeatButton(byId("repeatVideoQueue"), videoRepeatMode, "Video repeat");}
     function isTypingTarget(target){return !!target?.closest?.("input, textarea, select, [contenteditable='true']");}
-    function queueMatchesPlaylist(playlist){return !!playlist&&queue.length===playlist.track_ids.length&&queue.every((id,index)=>id===playlist.track_ids[index]);}
+    function queueMatchesPlaylist(playlist){return playlistDomain.queueMatchesPlaylist(queue,playlist);}
     function persistPlaylistResume(playlist, trackId){
       const previous=playlistResumeWrites.get(playlist.id)||Promise.resolve();
       const next=previous.catch(()=>{}).then(()=>playlistRequest(`/api/playlists/${encodeURIComponent(playlist.id)}/resume`,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({track_id:trackId})})).catch(error=>console.warn("[playlist] resume save failed",error));
@@ -440,26 +419,16 @@
       lastQueueSaveAt=Date.now();
       if(!queue.length){activePlaylistId=null; localStorage.removeItem("musicPlaybackState"); return;}
       syncActivePlaylistContext();
-      const state={
-        queue,
-        queueIndex,
-        playingId,
-        selectedId,
-        activePlaylistId,
-        currentTime:Number.isFinite(player.currentTime)?player.currentTime:0,
-        repeatMode,
-        updatedAt:Date.now()
-      };
+      const state=musicDomain.buildPlaybackState({queue,queueIndex,playingId,selectedId,activePlaylistId,currentTime:player.currentTime,repeatMode});
       localStorage.setItem("musicPlaybackState", JSON.stringify(state));
     }
     function restoreMusicState(){
       if(restoredMusicState)return;
       restoredMusicState=true;
-      let state=null;
-      try{state=JSON.parse(localStorage.getItem("musicPlaybackState")||"null");}catch{}
-      if(!state||!Array.isArray(state.queue)||!state.queue.length)return;
       const validIds=new Set(tracks.map(t=>t.id));
-      queue=state.queue.map(Number).filter(id=>validIds.has(id));
+      const state=musicDomain.parsePlaybackState(localStorage.getItem("musicPlaybackState"),validIds);
+      if(!state)return;
+      queue=state.queue;
       if(!queue.length){localStorage.removeItem("musicPlaybackState"); return;}
       const localQueueIndex=Math.min(Math.max(Number(state.queueIndex)||0,0),queue.length-1);
       queueIndex=localQueueIndex;
@@ -472,10 +441,7 @@
       playingId=t.id;
       selectedId=t.id;
       const resumeAt=queueIndex===localQueueIndex?(Number(state.currentTime)||0):0;
-      const seekAfterLoad=()=>{if(resumeAt>0&&Number.isFinite(player.duration))player.currentTime=Math.min(resumeAt,Math.max(0,player.duration-.25));};
-      player.addEventListener("loadedmetadata",seekAfterLoad,{once:true});
-      player.src=t.audio_url;
-      player.load();
+      musicDomain.prepareSource(player,t,{resumeAt});
       player.pause();
       if(["off","all","one"].includes(state.repeatMode)){
         repeatMode=state.repeatMode;
@@ -491,24 +457,16 @@
       if(!force&&Date.now()-lastVideoSaveAt<3000)return;
       lastVideoSaveAt=Date.now();
       if(!videoQueue.length){localStorage.removeItem("videoPlaybackState"); return;}
-      const state={
-        videoQueue,
-        videoQueueIndex,
-        selectedVideoId,
-        currentTime:Number.isFinite(videoPlayerEl.currentTime)?videoPlayerEl.currentTime:0,
-        videoRepeatMode,
-        updatedAt:Date.now()
-      };
+      const state=videoDomain.buildPlaybackState({videoQueue,videoQueueIndex,selectedVideoId,currentTime:videoPlayerEl.currentTime,videoRepeatMode});
       localStorage.setItem("videoPlaybackState", JSON.stringify(state));
     }
     function restoreVideoState(){
       if(restoredVideoState)return;
       restoredVideoState=true;
-      let state=null;
-      try{state=JSON.parse(localStorage.getItem("videoPlaybackState")||"null");}catch{}
-      if(!state||!Array.isArray(state.videoQueue)||!state.videoQueue.length)return;
       const validIds=new Set(videos.map(v=>v.id));
-      videoQueue=state.videoQueue.map(Number).filter(id=>validIds.has(id));
+      const state=videoDomain.parsePlaybackState(localStorage.getItem("videoPlaybackState"),validIds);
+      if(!state)return;
+      videoQueue=state.videoQueue;
       if(!videoQueue.length){localStorage.removeItem("videoPlaybackState"); return;}
       videoQueueIndex=Math.min(Math.max(Number(state.videoQueueIndex)||0,0),videoQueue.length-1);
       const id=validIds.has(Number(state.selectedVideoId))?Number(state.selectedVideoId):videoQueue[videoQueueIndex];
@@ -903,9 +861,9 @@
     function updatePlayingHighlights(){const t=tracks.find(x=>x.id===playingId); rowsEl.querySelectorAll("tr[data-id]").forEach(row=>row.classList.toggle("playingNow",Number(row.dataset.id)===playingId)); albumGridEl.querySelectorAll(".albumCard[data-album]").forEach(card=>card.classList.toggle("playingNow",!!t&&card.dataset.album===albumOf(t))); albumGridEl.querySelectorAll(".playlistCard[data-playlist-id]").forEach(card=>card.classList.toggle("playingNow",Boolean(playlistById(card.dataset.playlistId)?.track_ids.includes(playingId))));}
     function renderAll(){renderGroups(); renderAlbums(); renderRows();}
     // Video browsing treats folders like albums. Cover images come from cover.jpg/png/webp.
-    function yearFromText(text){const years=[...String(text||"").matchAll(/(?:19|20)\d{2}/g)].map(m=>Number(m[0])).filter(Boolean); return years.length?Math.max(...years):0;}
-    function videoYear(v){return yearFromText(`${v.path} ${v.folder} ${v.title}`);}
-    function videoFileCompare(a,b){return String(a.path||a.title||"").localeCompare(String(b.path||b.title||""),undefined,{numeric:true,sensitivity:"base"});}
+    const yearFromText=videoDomain.yearFromText;
+    const videoYear=videoDomain.videoYear;
+    const videoFileCompare=videoDomain.videoFileCompare;
     function videoCompare(a,b){const ay=videoYear(a), by=videoYear(b); if(ay!==by)return videoSort==="oldest"?ay-by:by-ay; return videoFileCompare(a,b);}
     function videoFiltered(){return videos.filter(v=>{const matchesGroup=selectedVideoGroup==="All" || (selectedVideoAsFolder?v.folder===selectedVideoGroup:(v.category===selectedVideoGroup || v.folder===selectedVideoGroup)); if(!matchesGroup)return false; return containsSearch([v.title,v.folder,v.category,v.path,v.format]);}).sort(videoFileCompare);}
     function isVideoCategory(group){return !selectedVideoAsFolder&&group!=="All"&&videos.some(v=>v.category===group);}
@@ -1083,7 +1041,7 @@
     function playVideoList(list, randomize=false, startId=null){const playable=randomize?shuffle(list):[...list]; if(!playable.length)return; videoQueue=playable.map(v=>v.id); videoQueueIndex=startId===null?0:Math.max(0,videoQueue.indexOf(startId)); saveVideoState({force:true}); playVideoQueueIndex(videoQueueIndex);}
     function addToVideoQueue(list){const ids=list.map(v=>v.id).filter(id=>!videoQueue.includes(id)); if(!ids.length)return; const wasEmpty=videoQueue.length===0; videoQueue.push(...ids); showQueueToast(ids.length===1?"Added video to queue":`Added ${ids.length} videos to queue`); pulseQueueButton(videoQueueToggleEl); if(wasEmpty){videoQueueIndex=0; saveVideoState({force:true}); playVideoQueueIndex(0);} else {saveVideoState({force:true}); updateVideoQueueLabel(); renderVideoQueue();}}
     function playVideoQueueIndex(index){if(index<0||index>=videoQueue.length)return; videoQueueIndex=index; saveVideoState({force:true}); selectVideo(videoQueue[videoQueueIndex]); renderVideoQueue();}
-    function selectVideo(id,{autoplay=true,resumeAt=null,persist=true}={}){const v=videos.find(x=>x.id===id); if(!v)return; player.pause(); selectedVideoId=id; const seekAfterLoad=()=>{const seconds=Number(resumeAt)||0; if(seconds>0&&Number.isFinite(videoPlayerEl.duration))videoPlayerEl.currentTime=Math.min(seconds,Math.max(0,videoPlayerEl.duration-.25));}; videoPlayerEl.addEventListener("loadedmetadata",seekAfterLoad,{once:true}); videoPlayerEl.src=v.video_url; videoPlayerEl.load(); if(autoplay){const p=videoPlayerEl.play(); if(p&&typeof p.catch==="function")p.catch(()=>{});}else videoPlayerEl.pause(); videoTitleEl.textContent=v.title; videoMetaEl.textContent=`${videoMetaSummary(v)}${v.browser_friendly?"":" - may need conversion for browser playback"}`; if(persist)saveVideoState({force:true}); updateVideoQueueLabel(); renderVideos();}
+    function selectVideo(id,{autoplay=true,resumeAt=null,persist=true}={}){const v=videos.find(x=>x.id===id); if(!v)return; player.pause(); selectedVideoId=id; videoDomain.prepareSource(videoPlayerEl,v,{autoplay,resumeAt}); videoTitleEl.textContent=v.title; videoMetaEl.textContent=`${videoMetaSummary(v)}${v.browser_friendly?"":" - may need conversion for browser playback"}`; if(persist)saveVideoState({force:true}); updateVideoQueueLabel(); renderVideos();}
     function removeVideoQueueIndex(index){if(index<0||index>=videoQueue.length)return; videoQueue.splice(index,1); if(index<videoQueueIndex)videoQueueIndex--; else if(index===videoQueueIndex){if(videoQueue.length){videoQueueIndex=Math.min(index,videoQueue.length-1); saveVideoState({force:true}); playVideoQueueIndex(videoQueueIndex);}else{videoQueueIndex=-1; stopVideoPlayback(); saveVideoState({force:true}); renderVideos();}} saveVideoState({force:true}); updateVideoQueueLabel(); renderVideoQueue();}
     function moveVideoQueueItem(fromIndex,toIndex){if(fromIndex===toIndex||fromIndex<0||toIndex<0||fromIndex>=videoQueue.length||toIndex>=videoQueue.length)return; const current=videoQueue[videoQueueIndex]; const [item]=videoQueue.splice(fromIndex,1); videoQueue.splice(toIndex,0,item); videoQueueIndex=current===undefined?-1:videoQueue.indexOf(current); saveVideoState({force:true}); updateVideoQueueLabel(); renderVideoQueue();}
     function videoQueueSummaryText(){return queueSummaryText ? queueSummaryText(videoQueue.length, "video") : `${videoQueue.length} video${videoQueue.length===1?"":"s"}`;}
@@ -1151,8 +1109,8 @@
     function selectTrack(id){selectedId=id; const t=tracks.find(x=>x.id===id); if(!t)return; if(playingId===null)applyAdaptiveTheme(); detailEl.innerHTML=`${t.has_artwork?`<img class="bigCover" src="${t.artwork_url}" alt="">`:`<div class="bigCover emptyCover">No Artwork</div>`}<div class="detailTitle">${esc(t.title)}</div><div class="detailSub">${esc(t.artist||"Unknown artist")} - ${esc(t.album||"No album")} ${t.date?`(${esc(t.date)})`:""}</div>${artworkPanel(t)}<form id="editForm">${field("title","Title",t)}${field("artist","Artist",t)}${field("album","Album",t)}${field("albumartist","Album Artist",t)}${field("date","Date",t)}${field("tracknumber","Track Number",t)}${field("genre","Genre",t)}<label>Path<input value="${esc(t.path)}" disabled></label><div class="actions"><button type="submit">Save Metadata</button><button type="button" class="secondary" id="resetBtn">Reset</button></div><div class="message" id="msg"></div></form>`; const form=byId("editForm"); if(form){on(form,"submit", saveSelected); on(byId("resetBtn"),"click",()=>selectTrack(id));} const artInput=byId("artworkFile"), artPreview=byId("artworkPreview"); if(artInput){const songArt=byId("saveSongArt"), albumArt=byId("saveAlbumArt"), selectedArt=byId("saveSelectedArt"); on(artInput,"change",()=>{const file=artInput.files&&artInput.files[0]; if(!file)return; const url=URL.createObjectURL(file); artPreview.src=url; artPreview.style.display="block";}); if(songArt)on(songArt,"click",()=>saveArtwork("song")); if(albumArt)on(albumArt,"click",()=>saveArtwork("album")); if(selectedArt)on(selectedArt,"click",()=>saveArtwork("selected"));} renderRows();}
     function readArtworkFile(){return new Promise((resolve,reject)=>{const input=byId("artworkFile"); const file=input&&input.files&&input.files[0]; if(!file){reject(new Error("Choose an artwork image first")); return;} if(!["image/jpeg","image/png","image/webp"].includes(file.type)){reject(new Error("Artwork must be JPG, PNG, or WEBP")); return;} const reader=new FileReader(); reader.onload=()=>resolve(reader.result); reader.onerror=()=>reject(new Error("Could not read artwork image")); reader.readAsDataURL(file);});}
     async function saveArtwork(scope){const msg=byId("artworkMsg"); try{if(scope==="selected"&&selectedIds.size===0){msg.className="message error"; msg.textContent="Select tracks first."; return;} msg.className="message"; msg.textContent=scope==="album"?"Saving album artwork...":scope==="selected"?"Saving selected artwork...":"Saving song artwork..."; const imageData=await readArtworkFile(); const result=await fetchJson(`/api/track/${selectedId}/artwork`,{method:"POST",headers:editHeaders({"Content-Type":"application/json"}),body:JSON.stringify({scope,image_data:imageData,ids:[...selectedIds]})}); if(!result.ok){msg.className="message error"; msg.textContent=result.error||"Artwork save failed"; return;} msg.className="message ok"; msg.textContent=`Saved artwork to ${result.changed} file${result.changed===1?"":"s"}.`; if(scope==="album"||scope==="selected")selectedIds.clear(); await loadTracks(true, selectedId);}catch(err){msg.className="message error"; msg.textContent=err.message||String(err);}}
-    async function saveSelected(event){event.preventDefault(); const msg=byId("msg"), form=event.currentTarget, data=Object.fromEntries(new FormData(form).entries()); msg.className="message"; msg.textContent="Saving..."; const result=await fetchJson(`/api/track/${selectedId}/metadata`,{method:"POST",headers:editHeaders({"Content-Type":"application/json"}),body:JSON.stringify(data)}); if(!result.ok){msg.className="message error"; msg.textContent=result.error||"Save failed"; return;} msg.className="message ok"; msg.textContent=result.changed.length?`Saved: ${result.changed.join(", ")}.`:"No changes."; await loadTracks(false, selectedId);}
-    async function bulkSave(){const values={artist:bulkArtist.value, album:bulkAlbum.value, albumartist:bulkAlbumArtist.value, date:bulkDate.value, genre:bulkGenre.value}; const result=await fetchJson("/api/bulk/metadata",{method:"POST",headers:editHeaders({"Content-Type":"application/json"}),body:JSON.stringify({ids:[...selectedIds],values})}); if(!result.ok){alert(result.error||"Bulk save failed"); return;} const changed=result.results.filter(r=>r.ok).length; selectedIds.clear(); alert(`Bulk save complete for ${changed} files. Selection cleared.`); await loadTracks(false, selectedId);}
+    async function saveSelected(event){event.preventDefault(); const msg=byId("msg"), form=event.currentTarget, data=editDomain.metadataPayload(form); msg.className="message"; msg.textContent="Saving..."; const result=await fetchJson(`/api/track/${selectedId}/metadata`,{method:"POST",headers:editHeaders({"Content-Type":"application/json"}),body:JSON.stringify(data)}); if(!result.ok){msg.className="message error"; msg.textContent=result.error||"Save failed"; return;} msg.className="message ok"; msg.textContent=result.changed.length?`Saved: ${result.changed.join(", ")}.`:"No changes."; await loadTracks(false, selectedId);}
+    async function bulkSave(){const values=editDomain.bulkMetadataPayload({artist:bulkArtist,album:bulkAlbum,albumartist:bulkAlbumArtist,date:bulkDate,genre:bulkGenre}); const result=await fetchJson("/api/bulk/metadata",{method:"POST",headers:editHeaders({"Content-Type":"application/json"}),body:JSON.stringify({ids:[...selectedIds],values})}); if(!result.ok){alert(result.error||"Bulk save failed"); return;} const changed=result.results.filter(r=>r.ok).length; selectedIds.clear(); alert(`Bulk save complete for ${changed} files. Selection cleared.`); await loadTracks(false, selectedId);}
     // Music queue and playback. The queue is just an ordered list of track IDs.
     function shuffle(list){const copy=[...list]; for(let i=copy.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1)); [copy[i],copy[j]]=[copy[j],copy[i]];} return copy;}
     function uniqueTracks(list){const seen=new Set(); return list.filter(track=>track&&!seen.has(track.id)&&seen.add(track.id));}
@@ -1199,8 +1157,7 @@
       playingId=t.id;
       selectedId=t.id;
       resetPlaybackTimeline(t);
-      player.src=t.audio_url;
-      player.load();
+      musicDomain.prepareSource(player,t);
       resetStatsSession(t.id);
       console.debug("[audio] audio url requested", t.audio_url);
       saveMusicState({force:true});
@@ -1287,13 +1244,7 @@
       bindQueueDrag(queueListEl, moveQueueItem);
       updatePlaylistSaveAction();
     }
-    async function playlistRequest(url, options={}){
-      const response=await fetch(url,{cache:"no-store",...options});
-      let result={};
-      try{result=await response.json();}catch{}
-      if(!response.ok||result.ok===false)throw new Error(result.error||"Playlist request failed.");
-      return result;
-    }
+    const playlistRequest=playlistDomain.request;
     async function loadPlaylists(render=true){
       const data=await fetchJson("/api/playlists");
       playlists=data.playlists||[];
@@ -1314,7 +1265,7 @@
     }
     async function updatePlaylistFromQueue(playlist){
       if(!appConfig.playlistEditable)return;
-      const trackIds=[...new Set(queue)].filter(id=>tracks.some(track=>track.id===id));
+      const trackIds=playlistDomain.uniqueAvailableTrackIds(queue,tracks);
       if(!trackIds.length){showQueueToast("Queue is empty"); return;}
       try{
         await playlistRequest(`/api/playlists/${encodeURIComponent(playlist.id)}`,{method:"PATCH",headers:{"Content-Type":"application/json"},body:JSON.stringify({track_ids:trackIds})});
@@ -1352,7 +1303,7 @@
           const id=playlistDialogEl.dataset.playlistId;
           await playlistRequest(`/api/playlists/${encodeURIComponent(id)}`,{method:"PATCH",headers:{"Content-Type":"application/json"},body:JSON.stringify({name})});
         }else{
-          const trackIds=[...new Set(queue)].filter(id=>tracks.some(track=>track.id===id));
+          const trackIds=playlistDomain.uniqueAvailableTrackIds(queue,tracks);
           const result=await playlistRequest("/api/playlists",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({name,track_ids:trackIds})});
           activePlaylistId=result.id;
         }
@@ -2106,4 +2057,4 @@
       on(window,"beforeunload",()=>{saveMusicState({force:true}); saveVideoState({force:true});});
       loadConfig().then(()=>loadTracks());
     }
-    initializeApp();
+    window.MediaPlayerStart=initializeApp;

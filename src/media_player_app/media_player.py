@@ -43,7 +43,12 @@ RouteHandler = Callable[[], None]
 
 from .media_library import Library, LibraryConfig  # noqa: E402
 from .listening_stats import ListeningStats  # noqa: E402
-from .metadata_tag_tools import EDITABLE_FIELDS, decode_image_payload, save_artwork_for_paths, save_metadata  # noqa: E402
+from .metadata_tag_tools import (  # noqa: E402
+    decode_image_payload,
+    save_artwork_for_paths,
+    save_metadata,
+    validate_metadata_payload,
+)
 from .playlist_store import PlaylistError, PlaylistStore  # noqa: E402
 try:  # noqa: E402
     from PIL import Image
@@ -115,20 +120,33 @@ def parse_range_header(range_header: str | None, file_size: int) -> tuple[HTTPSt
     Browsers usually request audio/video in byte ranges so they can begin
     playback quickly and seek without downloading the full file.
     """
+    if file_size <= 0:
+        raise ValueError("Cannot serve a byte range from an empty file")
     start = 0
     end = file_size - 1
     status = HTTPStatus.OK
-    if range_header and range_header.startswith("bytes="):
+    if range_header:
+        if not range_header.startswith("bytes="):
+            raise ValueError("Unsupported Range unit")
         status = HTTPStatus.PARTIAL_CONTENT
         range_value = range_header.split("=", 1)[1].split(",", 1)[0].strip()
+        if not range_value or "-" not in range_value:
+            raise ValueError("Invalid byte range")
         raw_start, _, raw_end = range_value.partition("-")
         if raw_start:
             start = int(raw_start)
             end = int(raw_end) if raw_end else file_size - 1
         elif raw_end:
             suffix_length = int(raw_end)
+            if suffix_length <= 0:
+                raise ValueError("Invalid suffix byte range")
             start = max(file_size - suffix_length, 0)
             end = file_size - 1
+        else:
+            raise ValueError("Invalid byte range")
+
+        if start >= file_size or end < start:
+            raise ValueError("Requested byte range is outside the file")
 
     start = max(0, min(start, file_size - 1))
     end = max(start, min(end, file_size - 1))
@@ -530,9 +548,11 @@ class Handler(BaseHTTPRequestHandler):
                 return
             # Single-track edits write tags to disk, then refresh the scan cache
             # so the UI immediately reflects what is embedded in the file.
-            result = save_metadata(path, payload)
+            result = save_metadata(path, validate_metadata_payload(payload))
             self.library.refresh()
             self.send_ok(**result)
+        except ValueError as exc:
+            self.send_error_json(str(exc), status=HTTPStatus.BAD_REQUEST)
         except Exception as exc:  # noqa: BLE001 - surface editor errors to UI.
             self.send_error_json(str(exc), status=500)
 
@@ -601,16 +621,9 @@ class Handler(BaseHTTPRequestHandler):
             ids = [int(track_id) for track_id in payload.get("ids", [])]
             # Empty bulk fields are ignored, so accidentally blank text boxes do
             # not erase tags across many files.
-            values = {
-                field: str(payload.get("values", {}).get(field, "")).strip()
-                for field in EDITABLE_FIELDS
-                if str(payload.get("values", {}).get(field, "")).strip()
-            }
+            values = validate_metadata_payload(payload.get("values"), allow_empty_values=False)
             if not ids:
                 self.send_error_json("No tracks selected", status=400)
-                return
-            if not values:
-                self.send_error_json("No bulk fields provided", status=400)
                 return
             results = []
             for track_id in ids:
@@ -625,6 +638,8 @@ class Handler(BaseHTTPRequestHandler):
                     results.append({"id": track_id, "ok": False, "error": str(exc)})
             self.library.refresh()
             self.send_ok(results=results)
+        except ValueError as exc:
+            self.send_error_json(str(exc), status=HTTPStatus.BAD_REQUEST)
         except Exception as exc:  # noqa: BLE001
             self.send_error_json(str(exc), status=500)
 
@@ -812,7 +827,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--web-share",
         action="store_true",
-        help="Run an internet-shareable read-only mode that hides local paths and logs private visit counts.",
+        help="Run an internet-shareable mode that hides local paths and disables media-file edits.",
     )
     parser.add_argument("--host", default="127.0.0.1")
     parser.add_argument("--port", default=8766, type=int)
