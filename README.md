@@ -8,6 +8,17 @@ a personal media library with a UI tailored to the collection. It can stay local
 by default, stream to a phone on the home network, work remotely through a
 private network, or create a temporary read-only web link.
 
+## Screenshots
+
+![Desktop music library](docs/screenshots/desktop-library-overview.jpg)
+
+![Now Playing with synced lyrics and audio visualizer](docs/screenshots/desktop-now-playing-lyrics.jpg)
+
+<p align="center">
+  <img src="docs/screenshots/mobile-library-overview.jpg" width="360" alt="Mobile music library">
+  <img src="docs/screenshots/mobile-listening-stats.jpg" width="360" alt="Mobile listening statistics">
+</p>
+
 ## Features
 
 - Browse music by album, category, year, and section

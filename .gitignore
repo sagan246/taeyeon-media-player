@@ -37,6 +37,12 @@ artwork/
 *.png
 *.webp
 
+# Keep only the curated README screenshots in Git.
+!docs/screenshots/desktop-library-overview.jpg
+!docs/screenshots/desktop-now-playing-lyrics.jpg
+!docs/screenshots/mobile-library-overview.jpg
+!docs/screenshots/mobile-listening-stats.jpg
+
 # OS/editor noise
 .DS_Store
 Thumbs.db
