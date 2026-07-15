@@ -5,12 +5,13 @@ The app is a Python web server with a plain HTML/CSS/JavaScript frontend.
 ```text
 Browser UI
   -> media_player.py
-  -> src/media_player_app/media_player.py
+  -> src/media_player_app/server.py
+     -> api_routes.py / edit_routes.py / streaming.py
   -> src/media_player_app/media_library.py
   -> src/media_player_app/media_models.py
 
 Metadata writes:
-Browser UI -> media_player.py -> src/media_player_app/metadata_tag_tools.py -> MP3/FLAC files
+Browser UI -> edit_routes.py -> metadata_tag_tools.py -> MP3/FLAC files
 
 Stats:
 Browser UI -> media_player.py -> src/media_player_app/listening_stats.py -> SQLite
@@ -31,7 +32,13 @@ Browser UI -> media_player.py -> src/media_player_app/playlist_store.py -> runti
 
 ## Backend
 
-- `src/media_player_app/media_player.py` - server, routes, APIs, streaming, edit/read-only gates.
+- `src/media_player_app/media_player.py` - compatibility entry point for existing launchers and imports.
+- `src/media_player_app/server.py` - HTTP handler composition, route dispatch, and server startup.
+- `src/media_player_app/server_config.py` - application paths and user-facing configuration.
+- `src/media_player_app/http_helpers.py` - shared request parsing and response helpers.
+- `src/media_player_app/api_routes.py` - library, playlist, config, and listening-stats APIs.
+- `src/media_player_app/edit_routes.py` - guarded metadata and embedded-artwork writes.
+- `src/media_player_app/streaming.py` - artwork, lyrics, thumbnails, and Range-aware media streaming.
 - `src/media_player_app/media_library.py` - scans music, videos, lyrics, artwork, and text files.
 - `src/media_player_app/media_models.py` - shared data records.
 - `src/media_player_app/metadata_tag_tools.py` - MP3/FLAC metadata and artwork writes.
