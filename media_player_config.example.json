@@ -7,6 +7,7 @@
   "video_dir": "Video",
   "text_dir": "Interviews",
   "text_tab_label": "Interviews",
+  "game_dir": "game",
   "preferred_categories": [
     "Albums",
     "Soundtracks",

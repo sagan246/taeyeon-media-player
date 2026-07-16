@@ -63,6 +63,7 @@ class ApiRoutesMixin:
                 "textDir": self.player_config.text_dir,
                 "preferredCategories": self.player_config.preferred_categories,
                 "preferredVideoCategories": self.player_config.preferred_video_categories,
+                "gameAvailable": self.game_dir is not None,
             }
         )
 

@@ -25,6 +25,58 @@ HTML_PATH = APP_ROOT / "assets" / "index.html"
 ASSET_DIR = APP_ROOT / "assets"
 VENDOR_DIR = APP_ROOT / "vendor"
 
+# Keep browser code split into focused source files while serving it as one
+# request. This matters over remote tunnels, where latency per file costs more
+# than the relatively small amount of JavaScript being transferred.
+FRONTEND_SCRIPT_FILES = (
+    "theme-data.js",
+    "theme-engine.js",
+    "theme-controller.js",
+    "audio-visualizer.js",
+    "playback-persistence.js",
+    "media-session.js",
+    "listening-stats-recorder.js",
+    "playback-events.js",
+    "ui-helpers.js",
+    "navigation-controller.js",
+    "queue-controller.js",
+    "music-controller.js",
+    "video-controller.js",
+    "components.js",
+    "music-components.js",
+    "playlist-components.js",
+    "queue-components.js",
+    "video-components.js",
+    "stats-components.js",
+    "lyrics.js",
+    "now-playing-components.js",
+    "music-domain.js",
+    "video-domain.js",
+    "stats-domain.js",
+    "stats-controller.js",
+    "playlist-domain.js",
+    "playlist-controller.js",
+    "edit-domain.js",
+    "edit-controller.js",
+    "app.js",
+    "app-bootstrap.js",
+)
+
+# CSS stays split by feature for maintainability, but is also served in one
+# request so remote clients do not pay tunnel latency for every @import.
+FRONTEND_STYLE_FILES = (
+    "styles/themes.css",
+    "styles/base.css",
+    "styles/album-focus.css",
+    "styles/shared-panels.css",
+    "styles/music.css",
+    "styles/player-queue-now-playing.css",
+    "styles/video.css",
+    "styles/health-stats-interviews.css",
+    "styles/game.css",
+    "styles/responsive.css",
+)
+
 # A bundled dependency directory is optional. Normal installations use the
 # dependencies declared in pyproject.toml instead.
 if VENDOR_DIR.exists() and str(VENDOR_DIR) not in sys.path:
@@ -51,6 +103,7 @@ class PlayerConfig:
     video_dir: str = "Video"
     text_dir: str = "Interviews"
     text_tab_label: str = "Interviews"
+    game_dir: str = "game"
     preferred_categories: list[str] = field(
         default_factory=lambda: ["Albums", "Soundtracks", "Live", "Covers", "Features"]
     )
@@ -70,6 +123,7 @@ class PlayerConfig:
             video_dir=text_value("video_dir", defaults.video_dir),
             text_dir=text_value("text_dir", defaults.text_dir),
             text_tab_label=text_value("text_tab_label", defaults.text_tab_label),
+            game_dir=str(data.get("game_dir", defaults.game_dir)).strip(),
             preferred_categories=config_string_list(data, "preferred_categories", defaults.preferred_categories),
             preferred_video_categories=config_string_list(
                 data, "preferred_video_categories", defaults.preferred_video_categories
@@ -79,6 +133,15 @@ class PlayerConfig:
     def library_config(self) -> LibraryConfig:
         """Translate player configuration into scanner configuration."""
         return LibraryConfig(music_dir=self.music_dir, video_dir=self.video_dir, text_dir=self.text_dir)
+
+    def game_path(self) -> Path | None:
+        """Resolve the configured game directory relative to the app."""
+        if not self.game_dir:
+            return None
+        configured = Path(self.game_dir).expanduser()
+        if not configured.is_absolute():
+            configured = APP_ROOT / configured
+        return configured.resolve()
 
 
 def load_config(path: Path) -> dict[str, object]:

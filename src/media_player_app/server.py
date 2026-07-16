@@ -26,6 +26,8 @@ from .server_config import (
     AUDIO_DEBUG_LOG,
     DEFAULT_CONFIG,
     DEFAULT_MEDIA_DIR,
+    FRONTEND_SCRIPT_FILES,
+    FRONTEND_STYLE_FILES,
     HTML_PATH,
     RUNTIME_DIR,
     STATS_DB,
@@ -45,10 +47,14 @@ class Handler(EditRoutesMixin, ApiRoutesMixin, StreamingRoutesMixin, HttpHelpers
     listening_stats: ListeningStats
     playlist_store: PlaylistStore
     player_config = PlayerConfig()
+    game_dir: Path | None = None
     editable = True
     playlist_editable = True
     web_share = False
     log_lock = threading.Lock()
+    frontend_bundle: bytes | None = None
+    frontend_style_bundle: bytes | None = None
+    frontend_bundle_lock = threading.Lock()
 
     def log_message(self, format: str, *args: object) -> None:
         message = format % args
@@ -73,6 +79,7 @@ class Handler(EditRoutesMixin, ApiRoutesMixin, StreamingRoutesMixin, HttpHelpers
     def get_prefix_routes(self, path_text: str, query_text: str) -> tuple[tuple[str, RouteHandler], ...]:
         return (
             ("/assets/", lambda: self.handle_asset(path_text)),
+            ("/game/", lambda: self.handle_game_asset(path_text)),
             ("/art/", lambda: self.handle_art(path_text)),
             ("/art-thumb/", lambda: self.handle_art_thumbnail(path_text, query_text)),
             ("/audio/", lambda: self.handle_audio(path_text)),
@@ -95,6 +102,12 @@ class Handler(EditRoutesMixin, ApiRoutesMixin, StreamingRoutesMixin, HttpHelpers
 
     def handle_asset(self, path_text: str) -> None:
         relative = unquote(path_text.removeprefix("/assets/"))
+        if relative == "app-bundle.js":
+            self.handle_frontend_bundle()
+            return
+        if relative == "styles-bundle.css":
+            self.handle_frontend_style_bundle()
+            return
         try:
             path = (ASSET_DIR / relative).resolve()
             path.relative_to(ASSET_DIR.resolve())
@@ -102,6 +115,53 @@ class Handler(EditRoutesMixin, ApiRoutesMixin, StreamingRoutesMixin, HttpHelpers
             self.send_error(HTTPStatus.NOT_FOUND)
             return
         self.send_file(path, cache_control="no-cache")
+
+    def handle_game_asset(self, path_text: str) -> None:
+        """Serve an optional standalone game without exposing other local files."""
+        if self.game_dir is None:
+            self.send_error(HTTPStatus.NOT_FOUND)
+            return
+        relative = unquote(path_text.removeprefix("/game/")) or "index.html"
+        try:
+            game_root = self.game_dir.resolve()
+            path = (game_root / relative).resolve()
+            path.relative_to(game_root)
+        except ValueError:
+            self.send_error(HTTPStatus.NOT_FOUND)
+            return
+        if path.is_dir():
+            path /= "index.html"
+        self.send_file(path, cache_control="no-cache")
+
+    def handle_frontend_bundle(self) -> None:
+        """Serve split frontend sources in one request for faster remote startup."""
+        with self.frontend_bundle_lock:
+            if self.frontend_bundle is None:
+                chunks = []
+                for filename in FRONTEND_SCRIPT_FILES:
+                    source = (ASSET_DIR / filename).read_text(encoding="utf-8")
+                    chunks.append(f"\n/* {filename} */\n{source}\n")
+                type(self).frontend_bundle = "".join(chunks).encode("utf-8")
+        self.send_compressible_bytes(
+            self.frontend_bundle,
+            "text/javascript; charset=utf-8",
+            cache_control="no-cache",
+        )
+
+    def handle_frontend_style_bundle(self) -> None:
+        """Serve split stylesheets in one compressed request."""
+        with self.frontend_bundle_lock:
+            if self.frontend_style_bundle is None:
+                chunks = []
+                for filename in FRONTEND_STYLE_FILES:
+                    source = (ASSET_DIR / filename).read_text(encoding="utf-8")
+                    chunks.append(f"\n/* {filename} */\n{source}\n")
+                type(self).frontend_style_bundle = "".join(chunks).encode("utf-8")
+        self.send_compressible_bytes(
+            self.frontend_style_bundle,
+            "text/css; charset=utf-8",
+            cache_control="no-cache",
+        )
 
     def do_POST(self) -> None:  # noqa: N802
         parsed = urlparse(self.path)
@@ -181,6 +241,12 @@ def main() -> int:
     web_share = bool(config.get("web_share", False)) or args.web_share
 
     Handler.player_config = player_config
+    configured_game_dir = player_config.game_path()
+    Handler.game_dir = (
+        configured_game_dir
+        if configured_game_dir is not None and (configured_game_dir / "index.html").is_file()
+        else None
+    )
     Handler.web_share = web_share
     Handler.editable = bool(config.get("editable", True)) and not args.read_only and not web_share
     Handler.playlist_editable = bool(config.get("playlist_editable", True))

@@ -77,7 +77,7 @@
       if(matching) setAccent(matching.id);
     }
 
-    function setAccent(themeId){
+    function setAccent(themeId, {persist=true}={}){
       const theme = engine.themeById
         ? engine.themeById(themeId)
         : (choices.find(item => item.id === themeId) || choices[0]);
@@ -85,7 +85,10 @@
       clearAdaptiveVariables();
       if(engine.applyThemeClass) engine.applyThemeClass(theme);
       activeId = theme.id;
-      localStorage.setItem("accentTheme", activeId);
+      if(persist){
+        localStorage.setItem("accentTheme", activeId);
+        localStorage.setItem("themePreferenceExplicit", "true");
+      }
       applyAdaptive();
       render();
       afterThemeChange();
@@ -93,7 +96,7 @@
 
     function initialize(){
       document.body.classList.add("dark");
-      setAccent(activeId);
+      setAccent(activeId, {persist:false});
     }
 
     return {applyAdaptive, initialize, render};

@@ -33,20 +33,32 @@ class HttpHelpersMixin:
         self.end_headers()
         self.wfile.write(body)
 
+    def send_compressible_bytes(
+        self,
+        body: bytes,
+        content_type: str,
+        status: int = 200,
+        cache_control: str = "no-store",
+    ) -> None:
+        """Gzip larger text responses when the browser supports it."""
+        accepts_gzip = "gzip" in self.headers.get("Accept-Encoding", "").lower()
+        if len(body) <= 1024 or not accepts_gzip:
+            self.send_bytes(body, content_type, status, cache_control)
+            return
+
+        compressed = gzip.compress(body, compresslevel=5)
+        self.send_response(status)
+        self.send_header("Content-Type", content_type)
+        self.send_header("Content-Encoding", "gzip")
+        self.send_header("Vary", "Accept-Encoding")
+        self.send_header("Content-Length", str(len(compressed)))
+        self.send_header("Cache-Control", cache_control)
+        self.end_headers()
+        self.wfile.write(compressed)
+
     def send_json(self, payload: object, status: int = 200) -> None:
         body = json.dumps(payload, ensure_ascii=False).encode("utf-8")
-        if len(body) > 1024 and "gzip" in self.headers.get("Accept-Encoding", ""):
-            compressed = gzip.compress(body, compresslevel=5)
-            self.send_response(status)
-            self.send_header("Content-Type", "application/json; charset=utf-8")
-            self.send_header("Content-Encoding", "gzip")
-            self.send_header("Vary", "Accept-Encoding")
-            self.send_header("Content-Length", str(len(compressed)))
-            self.send_header("Cache-Control", "no-store")
-            self.end_headers()
-            self.wfile.write(compressed)
-            return
-        self.send_bytes(body, "application/json; charset=utf-8", status)
+        self.send_compressible_bytes(body, "application/json; charset=utf-8", status)
 
     def send_ok(self, **payload: object) -> None:
         self.send_json({"ok": True, **payload})

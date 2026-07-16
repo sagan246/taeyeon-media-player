@@ -42,13 +42,18 @@
   }
 
   function initialTheme(){
-    let themeId = localStorage.getItem("accentTheme") || DEFAULT_THEME_ID;
-    const defaultVersion = localStorage.getItem("themeDefault");
-    if((!localStorage.getItem("accentTheme") || ["blue", DARK_ADAPTIVE_THEME_ID].includes(themeId)) && defaultVersion !== DEFAULT_THEME_ID){
-      themeId = DEFAULT_THEME_ID;
-      localStorage.setItem("accentTheme", themeId);
-      localStorage.setItem("themeDefault", DEFAULT_THEME_ID);
-    }
+    const savedTheme = localStorage.getItem("accentTheme");
+    const explicitPreference = localStorage.getItem("themePreferenceExplicit") === "true";
+    const prefersDark = window.matchMedia?.("(prefers-color-scheme: dark)").matches ?? true;
+
+    // Older versions stored the automatic adaptive default as if the user had
+    // selected it. Migrate that value back to an automatic system preference,
+    // while preserving any deliberately chosen fixed color theme.
+    const legacyAutomaticTheme = !explicitPreference
+      && [DEFAULT_THEME_ID, DARK_ADAPTIVE_THEME_ID, LIGHT_ADAPTIVE_THEME_ID].includes(savedTheme);
+    const themeId = !savedTheme || legacyAutomaticTheme
+      ? (prefersDark ? DARK_ADAPTIVE_THEME_ID : LIGHT_ADAPTIVE_THEME_ID)
+      : savedTheme;
     return themeById(themeId) ? themeId : DEFAULT_THEME_ID;
   }
 

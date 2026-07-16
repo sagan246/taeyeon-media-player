@@ -1,0 +1,38 @@
+/* Optional embedded game ------------------------------------------------ */
+.gameOnly { display:none; }
+body.game main {
+  grid-template-columns:minmax(0,1fr);
+  min-height:0;
+  padding:12px 14px 88px;
+}
+body.game nav,
+body.game aside,
+body.game .workspace > :not(.gameOnly),
+body.game #searchBox,
+body.game #musicFilter,
+body.game #refresh,
+body.game .stats { display:none !important; }
+body.game .workspace { min-width:0; }
+body.game .gameOnly { display:block !important; }
+body.game .gamePanel {
+  height:calc(100dvh - 76px - 100px);
+  min-height:480px;
+  overflow:hidden;
+  border:1px solid var(--line);
+  border-radius:8px;
+  background:#090a0f;
+}
+.gameFrame { display:block; width:100%; height:100%; border:0; background:#090a0f; }
+body.game .playerBar.musicOnly { display:grid !important; }
+body.game .nowPlayingDrawer.musicOnly.open,
+body.game .queueDrawer.musicOnly.open { display:block !important; }
+
+@media (max-width:860px) {
+  body.game main { padding:3px 2px 72px; }
+  body.game .gamePanel {
+    height:calc(100dvh - 59px - 72px);
+    min-height:360px;
+    border:0;
+    border-radius:0;
+  }
+}

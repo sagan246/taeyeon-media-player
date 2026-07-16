@@ -102,6 +102,7 @@
       textDir:"Interviews",
       preferredCategories:["Albums","Soundtracks","Live","Covers","Features"],
       preferredVideoCategories:["Concerts"],
+      gameAvailable:false,
     };
     if(!["newest","oldest","sections"].includes(videoSort)) videoSort = "newest";
     if(!["off","all","one"].includes(repeatMode)) repeatMode = "off";
@@ -120,7 +121,7 @@
       localStorage.setItem("visualizerDefault", "bars");
     }
     const selectedIds = new Set();
-    const MEDIA_TYPES = ["music", "video", "health", "interviews", "statsPage", "customize"];
+    const MEDIA_TYPES = ["music", "video", "health", "interviews", "statsPage", "customize", "game"];
     const MOBILE_BREAKPOINT = 860;
     const VIDEO_EMPTY_TITLE = "";
     const VIDEO_EMPTY_META = "";
@@ -165,6 +166,7 @@
     const interviewsTabEl = byId("interviewsTab");
     const statsTabEl = byId("statsTab");
     const customizeTabEl = byId("customizeTab");
+    const gameTabEl = byId("gameTab");
     const healthTabEl = byId("healthTab");
     const videoGridEl = byId("videoGrid");
     const videoPlayerEl = byId("videoPlayer");
@@ -342,6 +344,19 @@
     function artUrl(t){return t.artwork_thumb_url || t.artwork_url || "";}
     function smallArtUrl(t){return t.artwork_thumb_small_url || artUrl(t);}
     function fullArtUrl(t){return t.artwork_url || t.artwork_thumb_url || "";}
+    function gameArtworkUrl(){
+      const track=tracks.find(t=>t.id===playingId)||tracks.find(t=>t.id===selectedId);
+      const artworkUrl=track ? fullArtUrl(track) : "";
+      return artworkUrl ? new URL(artworkUrl,location.origin).href : "";
+    }
+    function syncGameArtwork(){
+      const frame=byId("gameFrame");
+      if(!frame?.dataset.loaded)return;
+      frame.contentWindow?.postMessage(
+        {type:"media-player-game-artwork",artworkUrl:gameArtworkUrl()},
+        location.origin
+      );
+    }
     function stableAlbumArtUrl(t){const album=albumOf(t); const art=tracks.find(x=>albumOf(x)===album&&x.has_artwork); return art ? fullArtUrl(art) : fullArtUrl(t);}
     function groupOf(t){if(groupMode==="category") return categoryOf(t); if(groupMode==="album") return albumOf(t); return folderOf(t);}
     function musicGroupMatches(t, group=selectedGroup){
@@ -1311,12 +1326,14 @@
       if(!t){
         nowInfoEl.innerHTML=`<div class="noArt">?</div><div class="nowText"></div>`;
         renderNowPlaying(null);
+        syncGameArtwork();
         return;
       }
       mediaSessionController.update(t,{paused:player.paused});
       applyAdaptiveTheme();
       nowInfoEl.innerHTML=`${t.has_artwork?`<img src="${smallArtUrl(t)}" alt="">`:`<div class="noArt">?</div>`}<div class="nowText"><div class="nowTitle">${esc(t.title)}</div><div class="nowSub">${esc(t.artist||"Unknown artist")}</div></div>`;
       renderNowPlaying(t);
+      syncGameArtwork();
       if(!player.paused&&!player.ended)requestAnimationFrame(startVisualizer);
     }
     function fmt(seconds){if(!Number.isFinite(seconds))return "0:00"; const m=Math.floor(seconds/60), s=Math.floor(seconds%60); return `${m}:${String(s).padStart(2,"0")}`;}
@@ -1336,6 +1353,7 @@
       if(emptyText)emptyText.textContent=`Text files are loaded locally from media\\${appConfig.textDir||"Interviews"}.`;
       const savePlaylist=byId("saveQueuePlaylist");
       if(savePlaylist)savePlaylist.hidden=!appConfig.playlistEditable;
+      gameTabEl.hidden=!appConfig.gameAvailable;
     }
     async function loadConfig(){try{appConfig={...appConfig,...await fetchJson("/api/config")};}catch{appConfig={...appConfig,editable:true};} applyDisplayConfig(); document.body.classList.toggle("readOnly",!appConfig.editable); if(!appConfig.editable&&appMode==="edit")setAppMode("listen"); if(!appConfig.editable&&mediaType==="health")setMediaType("music");}
     function renderCurrentMedia(){if(mediaType==="video")renderVideoAll(); else if(mediaType==="health")renderHealth(); else if(mediaType==="interviews")renderInterviews(); else if(mediaType==="statsPage")statsController.render(); else if(mediaType==="customize")renderCustomize(); else renderAll();}
@@ -1415,6 +1433,10 @@
     function setMediaType(type){
       if(!appConfig.editable && type === "health") type = "music";
       if(mediaType!==type)clearSearchQuery();
+      if(mediaType==="game"&&type!=="game"){
+        const frame=byId("gameFrame");
+        frame?.contentWindow?.postMessage({type:"media-player-game-visibility",visible:false},location.origin);
+      }
       mediaType = type;
       // Phones/tablets are playback-first. Editing remains desktop-only so the
       // small layout does not expose destructive metadata controls.
@@ -1426,17 +1448,24 @@
       interviewsTabEl.classList.toggle("inactive", type !== "interviews");
       statsTabEl.classList.toggle("inactive", type !== "statsPage");
       customizeTabEl.classList.toggle("inactive", type !== "customize");
+      gameTabEl.classList.toggle("inactive", type !== "game");
       healthTabEl.classList.toggle("inactive", type !== "health");
 
       searchEl.placeholder =
         type === "video" ? "Search video title or folder" :
         type === "interviews" ? "Search interviews" :
         type === "customize" ? "Customize the player" :
+        type === "game" ? "Game" :
         type === "statsPage" ? "Stats are summary-only" :
         type === "health" ? "Search is for music, video, interviews" :
         "Search title, album, artist";
 
       if(type === "statsPage")statsController.load();
+      if(type === "game"){
+        const frame=byId("gameFrame");
+        if(frame&&!frame.dataset.loaded){frame.src="/game/"; frame.dataset.loaded="true";}
+        else syncGameArtwork();
+      }
       if(type === "video"){
         setOpen(queueDrawerEl, false);
         if(!isMobileLayout())navigationController.collapse();
@@ -1451,7 +1480,7 @@
     function bindTableEvents(){document.querySelectorAll("th.sortable").forEach(th=>th.addEventListener("click",()=>{tableSortActive=true; const key=th.dataset.sort; if(sortKey===key) sortDir=sortDir==="asc"?"desc":"asc"; else { sortKey=key; sortDir=key==="has_artwork"?"desc":"asc"; } renderRows();})); selectShownEl.addEventListener("change",()=>{for(const t of filtered()){selectShownEl.checked?selectedIds.add(t.id):selectedIds.delete(t.id);} renderRows();}); clearSelectedEl.addEventListener("click",()=>{selectedIds.clear(); renderRows();}); bulkSaveEl.addEventListener("click",bulkSave);}
     function bindMusicControls(){on(byId("playShownMusic"),"click",()=>playList(currentPlaybackList())); on(byId("shuffleShownMusic"),"click",()=>playList(currentPlaybackList(),true)); on(byId("topQueueToggle"),"click",toggleMusicQueue); on(byId("showAllAlbums"),"click",closeMusicAlbum); on(byId("listenMode"),"click",enterListenMode); on(byId("editMode"),"click",()=>enterEditMode()); on(albumViewModeEl,"change",()=>setAlbumViewMode(albumViewModeEl.value)); on(musicFilterEl,"change",renderAll);}
     function bindBrowseControls(){on(byId("browseMusic"),"click",toggleBrowse); on(byId("browseVideo"),"click",toggleBrowse); on(byId("toggleBrowsePanel"),"click",toggleBrowse); on(byId("closeBrowse"),"click",closeBrowsePanel); on(byId("browseInterviews"),"click",toggleBrowse); on(byId("shuffleInterviews"),"click",shuffleInterview); on(byId("toggleInterviewBrowsePanel"),"click",toggleBrowse); on(byId("closeInterviewBrowse"),"click",closeInterviewBrowsePanel);}
-    function bindTabsAndSearch(){on(musicTabEl,"click",()=>setMediaType("music")); on(videoTabEl,"click",()=>setMediaType("video")); on(interviewsTabEl,"click",()=>setMediaType("interviews")); on(statsTabEl,"click",()=>setMediaType("statsPage")); on(customizeTabEl,"click",()=>setMediaType("customize")); on(healthTabEl,"click",()=>setMediaType("health")); on(searchEl,"input",renderCurrentMedia); on(byId("refresh"),"click",()=>loadTracks(true,selectedId)); on(window,"resize",setDeviceClass); on(window,"beforeunload",()=>listeningRecorder.flush());}
+    function bindTabsAndSearch(){on(musicTabEl,"click",()=>setMediaType("music")); on(videoTabEl,"click",()=>setMediaType("video")); on(interviewsTabEl,"click",()=>setMediaType("interviews")); on(statsTabEl,"click",()=>setMediaType("statsPage")); on(customizeTabEl,"click",()=>setMediaType("customize")); on(gameTabEl,"click",()=>setMediaType("game")); on(healthTabEl,"click",()=>setMediaType("health")); on(searchEl,"input",renderCurrentMedia); on(byId("refresh"),"click",()=>loadTracks(true,selectedId)); on(window,"resize",setDeviceClass); on(window,"message",event=>{if(event.origin===location.origin&&event.data?.type==="media-player-game-ready")syncGameArtwork();}); on(window,"beforeunload",()=>listeningRecorder.flush());}
     function bindKeyboardShortcuts(){on(document,"keydown",e=>{if(e.code!=="Space"||isTypingTarget(e.target)||mediaType!=="music"||appMode!=="listen")return; e.preventDefault(); toggleAudioPlayback();});}
     function bindVideoControls(){
       on(videoSortEl,"change",()=>{videoSort=videoSortEl.value; localStorage.setItem("videoSort",videoSort); renderVideoAll();});

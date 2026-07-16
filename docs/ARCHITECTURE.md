@@ -26,6 +26,7 @@ Browser UI -> media_player.py -> src/media_player_app/playlist_store.py -> runti
 - `launcher_gui.py` - GUI launcher entry point.
 - `src/media_player_app/` - Python application package.
 - `assets/` - browser UI, JavaScript, and CSS.
+- `game/` - built-in dependency-free browser game.
 - `docs/` - project documentation.
 - `windows_commands/` and `mac_commands/` - one-click launchers.
 - `runtime/` - ignored local caches, logs, and SQLite state.
@@ -52,6 +53,9 @@ Browser UI -> media_player.py -> src/media_player_app/playlist_store.py -> runti
 `assets/app.js` coordinates shared state and rendering. Domain modules keep
 music/video persistence, stats date math, playlists, metadata payloads, and app
 startup independently testable and easier to change without cross-tab drift.
+The server serves the split JavaScript and CSS as `/assets/app-bundle.js` and
+`/assets/styles-bundle.css`. This preserves modular source files while avoiding
+many latency-heavy requests over a tunnel; text responses are gzip compressed.
 
 - `assets/index.html` - app shell.
 - `assets/app.js` - stateful coordinator and cross-domain event wiring.

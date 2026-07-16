@@ -31,8 +31,9 @@ private network, or create a temporary read-only web link.
 - Listening stats by day, week, month, year, and all time
 - Optional MP3/FLAC metadata and artwork editing
 - Desktop and mobile browser UI
+- Built-in touch game that can use current album artwork
 
-Media files are **not included** in this repository.
+Media files and optional personal game photos are **not included** in this repository.
 
 ## Getting Started
 

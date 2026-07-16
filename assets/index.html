@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="theme-color" content="#000000">
   <title>Local Media Player</title>
-  <link rel="stylesheet" href="/assets/styles.css?v=queue-layer-gap1">
+  <link rel="stylesheet" href="/assets/styles-bundle.css?v=frontend-bundle1">
 </head>
 <body class="listen music">
   <header>
@@ -18,6 +18,7 @@
           <button id="interviewsTab" class="mediaTab topTab topAction inactive iconOnly" title="Interviews" aria-label="Interviews"><svg class="buttonIcon" viewBox="0 0 24 24" aria-hidden="true"><path d="M7 3h7l4 4v14H7z"/><path d="M14 3v5h5"/><path d="M10 12h6"/><path d="M10 16h6"/></svg></button>
           <button id="statsTab" class="mediaTab topTab topAction inactive iconOnly" title="Stats" aria-label="Stats"><svg class="buttonIcon" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 19V5"/><path d="M4 19h16"/><path d="M8 16v-5"/><path d="M12 16V8"/><path d="M16 16v-9"/></svg></button>
           <button id="customizeTab" class="mediaTab topTab topAction inactive iconOnly" title="Customize" aria-label="Customize"><svg class="buttonIcon" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16"/><path d="M4 17h16"/><circle cx="9" cy="7" r="2"/><circle cx="15" cy="17" r="2"/></svg></button>
+          <button id="gameTab" class="mediaTab topTab topAction inactive iconOnly" title="Game" aria-label="Game" hidden><svg class="buttonIcon" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 8h12l2 8.5a2 2 0 0 1-3.5 1.7L14.5 16h-5l-2 2.2A2 2 0 0 1 4 16.5z"/><path d="M8 11v4M6 13h4"/><circle cx="16" cy="12" r=".8" fill="currentColor" stroke="none"/><circle cx="18" cy="14" r=".8" fill="currentColor" stroke="none"/></svg></button>
           <button id="healthTab" class="mediaTab topTab topAction inactive iconOnly" title="Health" aria-label="Health"><svg class="buttonIcon" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 6L9 17l-5-5"/></svg></button>
           <button id="refresh" class="secondary topAction iconOnly" title="Refresh library" aria-label="Refresh library"><svg class="buttonIcon" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 11a8 8 0 1 0-2.3 5.7"/><path d="M20 4v7h-7"/></svg></button>
           <button id="listenMode" class="ghost topAction active iconOnly" title="Listen Mode" aria-label="Listen Mode"><svg class="buttonIcon" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 13v-1a8 8 0 0 1 16 0v1"/><path d="M5 13h3v6H5z"/><path d="M16 13h3v6h-3z"/></svg></button>
@@ -103,6 +104,9 @@
         <div class="customizeCard">
           <div class="themeGrid" id="themeGrid"></div>
         </div>
+      </section>
+      <section class="gamePanel gameOnly" id="gamePanel">
+        <iframe id="gameFrame" class="gameFrame" title="Game" loading="lazy" allow="fullscreen"></iframe>
       </section>
       <section class="controls interviewsOnly">
         <span class="viewTitle" data-text-label>Interviews</span>
@@ -198,36 +202,6 @@
       <div class="dialogActions"><button id="confirmPlaylist" type="submit">Save</button><button id="cancelPlaylistDialog" class="secondary" type="button">Cancel</button></div>
     </form>
   </dialog>
-  <script src="/assets/theme-data.js?v=theme-mode-toggle1"></script>
-  <script src="/assets/theme-engine.js?v=theme-engine1"></script>
-  <script src="/assets/theme-controller.js?v=controller1"></script>
-  <script src="/assets/audio-visualizer.js?v=visualizer-module1"></script>
-  <script src="/assets/playback-persistence.js?v=playback-persistence1"></script>
-  <script src="/assets/media-session.js?v=media-session1"></script>
-  <script src="/assets/listening-stats-recorder.js?v=listening-recorder1"></script>
-  <script src="/assets/playback-events.js?v=controller1"></script>
-  <script src="/assets/ui-helpers.js?v=ui-helpers1"></script>
-  <script src="/assets/navigation-controller.js?v=controller1"></script>
-  <script src="/assets/queue-controller.js?v=queue-context1"></script>
-  <script src="/assets/music-controller.js?v=controller1"></script>
-  <script src="/assets/video-controller.js?v=controller1"></script>
-  <script src="/assets/components.js?v=music-browse-tree1"></script>
-  <script src="/assets/music-components.js?v=music-components1"></script>
-  <script src="/assets/playlist-components.js?v=playlist-components1"></script>
-  <script src="/assets/queue-components.js?v=queue-components1"></script>
-  <script src="/assets/video-components.js?v=video-components1"></script>
-  <script src="/assets/stats-components.js?v=stats-components1"></script>
-  <script src="/assets/lyrics.js?v=lyrics2"></script>
-  <script src="/assets/now-playing-components.js?v=now-playing-components1"></script>
-  <script src="/assets/music-domain.js?v=domain1"></script>
-  <script src="/assets/video-domain.js?v=domain1"></script>
-  <script src="/assets/stats-domain.js?v=domain1"></script>
-  <script src="/assets/stats-controller.js?v=controller1"></script>
-  <script src="/assets/playlist-domain.js?v=domain1"></script>
-  <script src="/assets/playlist-controller.js?v=controller1"></script>
-  <script src="/assets/edit-domain.js?v=domain1"></script>
-  <script src="/assets/edit-controller.js?v=controller1"></script>
-  <script src="/assets/app.js?v=queue-layer-gap1"></script>
-  <script src="/assets/app-bootstrap.js?v=domain1"></script>
+  <script src="/assets/app-bundle.js?v=frontend-bundle3"></script>
 </body>
 </html>
