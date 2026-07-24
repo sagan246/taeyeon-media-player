@@ -59,8 +59,8 @@ class ApiRoutesMixin:
         )
 
     def handle_refresh_api(self) -> None:
-        self.library.refresh()
-        self.send_ok()
+        result = self.library.refresh(wait=False)
+        self.send_json(asdict(result), status=202 if result.status == "in_progress" else 200)
 
     def public_track(self, track: object) -> dict[str, object]:
         data = asdict(track)

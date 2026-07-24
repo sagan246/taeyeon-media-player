@@ -9,6 +9,7 @@ from pathlib import Path
 from urllib.parse import parse_qs, unquote
 
 from .http_helpers import content_type_for
+from .media_library import CachedArtwork
 from .runtime_files import atomic_write_bytes
 from .server_config import ART_THUMB_CACHE_DIR, ART_THUMB_DISPLAY_SIZE
 
@@ -65,7 +66,7 @@ class StreamingRoutesMixin:
         if artwork is None:
             self.send_error(HTTPStatus.NOT_FOUND)
             return
-        self.send_bytes(artwork.data, artwork.mime, cache_control="private, max-age=86400")
+        self.send_cached_artwork(artwork)
 
     def handle_art_thumbnail(self, path_text: str, query_text: str) -> None:
         track_id = self.parse_last_int(path_text)
@@ -78,7 +79,7 @@ class StreamingRoutesMixin:
             self.send_error(HTTPStatus.NOT_FOUND)
             return
         if Image is None:
-            self.send_bytes(artwork.data, artwork.mime, cache_control="private, max-age=86400")
+            self.send_cached_artwork(artwork)
             return
 
         query = parse_qs(query_text)
@@ -91,7 +92,7 @@ class StreamingRoutesMixin:
 
         try:
             ART_THUMB_CACHE_DIR.mkdir(parents=True, exist_ok=True)
-            with Image.open(BytesIO(artwork.data)) as image:
+            with Image.open(artwork.path) as image:
                 image = image.convert("RGB")
                 image.thumbnail((size, size), Image.Resampling.LANCZOS)
                 output = BytesIO()
@@ -101,7 +102,17 @@ class StreamingRoutesMixin:
             self.send_bytes(body, "image/jpeg", cache_control="private, max-age=604800")
         except Exception:
             # Rare embedded image formats should not make artwork disappear.
-            self.send_bytes(artwork.data, artwork.mime, cache_control="private, max-age=86400")
+            self.send_cached_artwork(artwork)
+
+    def send_cached_artwork(self, artwork: CachedArtwork) -> None:
+        """Serve one cached cover without retaining every cover in RAM."""
+        try:
+            body = artwork.path.read_bytes()
+            mime = artwork.mime
+        except OSError:
+            self.send_error(HTTPStatus.NOT_FOUND)
+            return
+        self.send_bytes(body, mime, cache_control="private, max-age=86400")
 
     @staticmethod
     def thumbnail_size(query: dict[str, list[str]]) -> int:

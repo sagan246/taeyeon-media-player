@@ -1,9 +1,11 @@
 ﻿from __future__ import annotations
 
 import base64
+import hashlib
 import json
 import re
 import threading
+import time
 from dataclasses import dataclass
 from pathlib import Path
 from urllib.parse import quote
@@ -33,13 +35,21 @@ class LibraryConfig:
     text_dir: str = "Interviews"
 
 
+@dataclass(frozen=True)
+class CachedArtwork:
+    """Reference to artwork cached on disk instead of retained in memory."""
+
+    mime: str
+    path: Path
+
+
 @dataclass
 class LibrarySnapshot:
     """! @brief Complete scan result swapped into Library atomically."""
 
     tracks: list[Track]
     paths: list[Path]
-    artwork: dict[int, Artwork]
+    artwork: dict[int, CachedArtwork]
     videos: list[Video]
     video_paths: list[Path]
     video_thumbnails: dict[int, Path]
@@ -47,6 +57,22 @@ class LibrarySnapshot:
     interviews: list[Interview]
     lyrics: dict[int, str]
     lyrics_formats: dict[int, str]
+    scan_times_ms: dict[str, int]
+
+
+@dataclass(frozen=True)
+class LibraryRefreshResult:
+    """Summary returned after a refresh request."""
+
+    status: str
+    total_ms: int
+    music_ms: int
+    video_ms: int
+    text_ms: int
+    cache_write_ms: int
+    tracks: int
+    videos: int
+    interviews: int
 
 
 class Library:
@@ -68,7 +94,7 @@ class Library:
         self.paths: list[Path] = []
         self.track_by_id: dict[int, Track] = {}
         self.track_paths_by_id: dict[int, Path] = {}
-        self.artwork: dict[int, Artwork] = {}
+        self.artwork: dict[int, CachedArtwork] = {}
         self.videos: list[Video] = []
         self.video_paths: list[Path] = []
         self.video_paths_by_id: dict[int, Path] = {}
@@ -78,37 +104,76 @@ class Library:
         self.lyrics: dict[int, str] = {}
         self.lyrics_formats: dict[int, str] = {}
         self.lock = threading.Lock()
+        self.refresh_lock = threading.Lock()
+        self.last_refresh_result: LibraryRefreshResult | None = None
         self.refresh()
 
-    def refresh(self) -> None:
+    def refresh(self, *, wait: bool = True) -> LibraryRefreshResult:
+        """Build and atomically install a fresh library snapshot.
+
+        Refresh requests are serialized because overlapping scans can race while
+        replacing the shared metadata cache. HTTP refreshes use ``wait=False``
+        so repeated clicks report the active scan instead of starting another.
+        """
+        if not self.refresh_lock.acquire(blocking=wait):
+            with self.lock:
+                return LibraryRefreshResult(
+                    status="in_progress",
+                    total_ms=0,
+                    music_ms=0,
+                    video_ms=0,
+                    text_ms=0,
+                    cache_write_ms=0,
+                    tracks=len(self.tracks),
+                    videos=len(self.videos),
+                    interviews=len(self.interviews),
+                )
+
+        started = time.perf_counter()
         # Build fresh snapshots outside the lock, then swap them in quickly so
         # browser requests do not wait on a full media scan.
-        snapshot = build_library_snapshot(
-            self.music_dir,
-            self.video_dir,
-            self.text_dir,
-            scan_cache_path=self.scan_cache_path,
-            cache_namespace=self.cache_namespace,
-        )
+        try:
+            snapshot = build_library_snapshot(
+                self.music_dir,
+                self.video_dir,
+                self.text_dir,
+                scan_cache_path=self.scan_cache_path,
+                cache_namespace=self.cache_namespace,
+            )
 
-        with self.lock:
-            self.tracks = snapshot.tracks
-            self.paths = snapshot.paths
-            self.track_by_id = {track.id: track for track in snapshot.tracks}
-            self.track_paths_by_id = {
-                track.id: path for track, path in zip(snapshot.tracks, snapshot.paths)
-            }
-            self.artwork = snapshot.artwork
-            self.videos = snapshot.videos
-            self.video_paths = snapshot.video_paths
-            self.video_paths_by_id = {
-                video.id: path for video, path in zip(snapshot.videos, snapshot.video_paths)
-            }
-            self.video_thumbnails = snapshot.video_thumbnails
-            self.video_folder_covers = snapshot.video_folder_covers
-            self.interviews = snapshot.interviews
-            self.lyrics = snapshot.lyrics
-            self.lyrics_formats = snapshot.lyrics_formats
+            result = LibraryRefreshResult(
+                status="complete",
+                total_ms=round((time.perf_counter() - started) * 1000),
+                music_ms=snapshot.scan_times_ms["music"],
+                video_ms=snapshot.scan_times_ms["video"],
+                text_ms=snapshot.scan_times_ms["text"],
+                cache_write_ms=snapshot.scan_times_ms["cache_write"],
+                tracks=len(snapshot.tracks),
+                videos=len(snapshot.videos),
+                interviews=len(snapshot.interviews),
+            )
+            with self.lock:
+                self.tracks = snapshot.tracks
+                self.paths = snapshot.paths
+                self.track_by_id = {track.id: track for track in snapshot.tracks}
+                self.track_paths_by_id = {
+                    track.id: path for track, path in zip(snapshot.tracks, snapshot.paths)
+                }
+                self.artwork = snapshot.artwork
+                self.videos = snapshot.videos
+                self.video_paths = snapshot.video_paths
+                self.video_paths_by_id = {
+                    video.id: path for video, path in zip(snapshot.videos, snapshot.video_paths)
+                }
+                self.video_thumbnails = snapshot.video_thumbnails
+                self.video_folder_covers = snapshot.video_folder_covers
+                self.interviews = snapshot.interviews
+                self.lyrics = snapshot.lyrics
+                self.lyrics_formats = snapshot.lyrics_formats
+                self.last_refresh_result = result
+            return result
+        finally:
+            self.refresh_lock.release()
 
     def path_for_id(self, track_id: int) -> Path | None:
         with self.lock:
@@ -157,15 +222,26 @@ def build_library_snapshot(
     """Scan each media source independently, then return one swappable snapshot."""
     # Music uses a metadata/artwork cache because tag reads are the expensive
     # part. Video and interview scans are lightweight path/text scans.
+    music_started = time.perf_counter()
     cache = load_scan_cache(scan_cache_path)
     tracks, paths, artwork, lyrics, lyrics_formats, next_cache = scan_music(
         music_dir,
         cache,
         cache_namespace=cache_namespace,
     )
+    music_ms = round((time.perf_counter() - music_started) * 1000)
+
+    video_started = time.perf_counter()
     videos, video_paths, video_thumbnails, video_folder_covers = scan_videos(video_dir)
+    video_ms = round((time.perf_counter() - video_started) * 1000)
+
+    text_started = time.perf_counter()
     interviews = scan_interviews(interviews_dir)
+    text_ms = round((time.perf_counter() - text_started) * 1000)
+
+    cache_started = time.perf_counter()
     save_scan_cache(next_cache, scan_cache_path)
+    cache_write_ms = round((time.perf_counter() - cache_started) * 1000)
     return LibrarySnapshot(
         tracks=tracks,
         paths=paths,
@@ -177,6 +253,12 @@ def build_library_snapshot(
         interviews=interviews,
         lyrics=lyrics,
         lyrics_formats=lyrics_formats,
+        scan_times_ms={
+            "music": music_ms,
+            "video": video_ms,
+            "text": text_ms,
+            "cache_write": cache_write_ms,
+        },
     )
 
 
@@ -206,13 +288,13 @@ def scan_music(
     cache: dict[str, dict[str, object]],
     *,
     cache_namespace: str = "",
-) -> tuple[list[Track], list[Path], dict[int, Artwork], dict[int, str], dict[int, str], dict[str, dict[str, object]]]:
+) -> tuple[list[Track], list[Path], dict[int, CachedArtwork], dict[int, str], dict[int, str], dict[str, dict[str, object]]]:
     """! @brief Scan audio files and reuse cached metadata when possible."""
     # Metadata/artwork reads are the slow part. The scan cache lets playback and
     # refreshes stay quick unless a file's size or modified time actually changed.
     tracks: list[Track] = []
     paths: list[Path] = []
-    artwork: dict[int, Artwork] = {}
+    artwork: dict[int, CachedArtwork] = {}
     lyrics: dict[int, str] = {}
     lyrics_formats: dict[int, str] = {}
     next_cache: dict[str, dict[str, object]] = {}
@@ -420,18 +502,15 @@ def cache_artwork_data(relative_path: str, data: bytes) -> str:
     return cache_path.name
 
 
-def artwork_from_cache(entry: dict[str, object]) -> Artwork | None:
+def artwork_from_cache(entry: dict[str, object]) -> CachedArtwork | None:
     mime = str(entry.get("artwork_mime", ""))
     artwork_file = str(entry.get("artwork_file", ""))
     if not mime or not artwork_file:
         return None
     path = ARTWORK_CACHE_DIR / artwork_file
-    if not path.is_file():
+    if not path.is_file() or path.stat().st_size <= 0:
         return None
-    data = path.read_bytes()
-    if not data:
-        return None
-    return Artwork(mime=mime, data=data)
+    return CachedArtwork(mime=mime, path=path)
 
 
 def scan_videos(video_dir: Path) -> tuple[list[Video], list[Path], dict[int, Path], dict[str, Path]]:
