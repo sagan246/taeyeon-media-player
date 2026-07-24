@@ -3,9 +3,9 @@
 ## Startup
 
 - Start the player on port `8766`.
-- Start Cloudflare mode and confirm it tunnels that same server.
+- Start a Cloudflare tunnel and confirm it reaches that same server.
 - Confirm desktop and mobile pages load.
-- Confirm browser API responses do not expose local paths.
+- Confirm browser API responses identify media with library IDs.
 - Refresh the library twice quickly and confirm only one scan runs.
 - Confirm `/api/refresh` reports scan timings and current item counts.
 

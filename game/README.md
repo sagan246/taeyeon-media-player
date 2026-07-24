@@ -20,13 +20,12 @@ preference is remembered on the device.
 Pausing freezes the current game and switches to a visualizer-only view. The
 Run control restores the same score and piece positions.
 
-The preset-photo mode optionally uses these local files:
+The preset-photo mode uses these bundled files:
 
 ```text
 game/assets/photo-grid.png
 game/assets/hazard.png
 ```
 
-They are intentionally ignored by Git. When either photo is absent, the game
-continues normally with its plain CSS shapes. `preset-icon.png` is application
-UI and is included in the repository.
+If either photo is absent, the game continues with its plain CSS shapes.
+`preset-icon.png` is the selector icon.

@@ -9,7 +9,7 @@ windows_commands/start_launcher.cmd
 mac_commands/start_launcher.command
 ```
 
-The plain launchers start the private player on port `8766`.
+The plain launchers start the player on port `8766`.
 
 ```text
 windows_commands/start_player.cmd
@@ -29,7 +29,7 @@ Important settings:
 - `preferred_categories` and `preferred_video_categories` - browse order.
 - `playlist_editable` - allow playlist create, update, rename, and delete.
 
-Media tags and embedded artwork are read-only in every mode.
+Media tags and embedded artwork are read-only.
 
 ## Library Layout
 
@@ -55,17 +55,16 @@ Lyrics should live beside the matching song. Lookup prefers:
 01 - Song.txt
 ```
 
-## Access Modes
+## Access
 
-- Private on this computer: `http://127.0.0.1:8766/`
-- Private on home Wi-Fi: bind to `0.0.0.0`, then use `http://<lan-address>:8766/`
-- Private remote: use the launcher with Tailscale
-- Cloudflare Web Share: use the launcher to tunnel the player running on port `8766`
+- This computer: `http://127.0.0.1:8766/`
+- Home network: bind to `0.0.0.0`, then open `http://<lan-address>:8766/`
+- Private remote access: use the launcher with Tailscale
+- Temporary sharing: use the launcher to create a Cloudflare tunnel
 
-Browser APIs hide local paths in every mode. Cloudflare Web Share does not
-provide application authentication; anyone with the temporary URL can use the
-same player features, including playlist changes when `playlist_editable` is
-enabled.
+These all connect to the same server. Cloudflare links have no application
+login; anyone with the temporary URL can use enabled player features, including
+playlist changes when `playlist_editable` is enabled.
 
 ## Command Line
 
@@ -74,4 +73,5 @@ python media_player.py --media-dir <media-folder>
 python media_player.py --media-dir <media-folder> --host 0.0.0.0 --port 8766
 ```
 
-`--media-dir` is validated against the configured media root.
+`--media-dir` tells the server which library to scan. Browsers receive library
+IDs, not filesystem paths.

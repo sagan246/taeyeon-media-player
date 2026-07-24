@@ -40,10 +40,9 @@ artwork/
 *.png
 *.webp
 
-# The built-in game's two optional personal photos stay local. Its small
-# selector icon is application UI and is safe to publish.
-game/assets/photo-grid.png
-game/assets/hazard.png
+# The built-in game's small image set is part of the application.
+!game/assets/photo-grid.png
+!game/assets/hazard.png
 !game/assets/preset-icon.png
 
 # Keep only the curated README screenshots in Git.

@@ -13,12 +13,11 @@ and reliable playback on desktop and mobile.
 - Keep mobile layouts touch-friendly without duplicating application behavior.
 - Preserve fast startup and Range-aware streaming for large local files.
 
-## Modes
+## Access
 
-- Private computer, LAN, and Tailscale modes expose the complete player.
-- Browser APIs hide local paths in every mode.
-- Cloudflare Web Share tunnels the same player and retains its playback and
-  optional playlist-management behavior.
+- One player server handles local, LAN, Tailscale, and Cloudflare access.
+- Browsers use library IDs rather than filesystem paths.
+- Cloudflare tunnels the running server; it does not launch another app.
 
 Themes change presentation only. Access and media behavior must not depend on a
 theme.

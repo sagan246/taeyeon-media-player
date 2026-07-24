@@ -1,12 +1,8 @@
 # Media Player
 
-A local-first web media player for keeping music, videos, lyrics, and text
-archives in one place.
-
-It runs on your computer, streams local files to a browser, and is designed for
-a personal media library with a UI tailored to the collection. It can stay local
-by default, stream to a phone on the home network, work remotely through a
-private network, or create a temporary web link for short-term sharing.
+A local-first web player for music, video, lyrics, playlists, and text
+collections. It runs one server on your computer and works in desktop and
+mobile browsers.
 
 ## Screenshots
 
@@ -21,118 +17,79 @@ private network, or create a temporary web link for short-term sharing.
 
 ## Features
 
-- Browse music by album, category, year, and section
-- Browse folder-based video collections with optional cover artwork
-- Read local text archives
-- Display plain text and timed `.lrc` lyrics
-- Music and video queues with resume support
-- Save or update music queues as named playlists with cross-device resume
-- Now Playing screen with artwork, lyrics, controls, and visualizers
-- Listening stats by day, week, month, year, and all time
-- Desktop and mobile browser UI
-- Built-in touch game that can use current album artwork
+- Music and video libraries with queues, resume, and playlists
+- Embedded artwork, folder covers, and timed `.lrc` lyrics
+- Now Playing visualizers and listening statistics
+- Local text collections
+- Responsive desktop and mobile UI
+- Built-in touch game with bundled photo assets
 
-Media files and optional personal game photos are **not included** in this repository.
+Media files are not included.
 
 ## Getting Started
 
-Python 3.11 or newer is supported. Install the player and its required audio
-tag library from the repository root:
+Requires Python 3.11 or newer.
 
 ```bash
 python -m pip install -e .
 ```
 
-Install optional image resizing support with:
+Optional image resizing:
 
 ```bash
 python -m pip install -e ".[images]"
 ```
 
-Use the included launcher:
-
-Windows:
+Recommended launchers:
 
 ```text
 windows_commands/start_launcher.cmd
-```
-
-macOS:
-
-```text
 mac_commands/start_launcher.command
 ```
 
-If macOS blocks the launcher, run once:
-
-```bash
-chmod +x mac_commands/start_launcher.command mac_commands/start_player.command
-```
-
-The player uses port `8766` for local, LAN, and Cloudflare access. Cloudflare
-tunnels the same running player instead of starting a duplicate server.
-Browser APIs never expose local paths.
-
-For a simple local start without the launcher, use:
+Simple local launchers:
 
 ```text
 windows_commands/start_player.cmd
 mac_commands/start_player.command
 ```
 
-After installation, the equivalent command-line entry point is:
-
-```bash
-media-player --media-dir <media-folder>
-```
-
-## Command Line
-
-Private mode:
-
-```powershell
-python media_player.py --media-dir <media-folder> --host 127.0.0.1 --port 8766
-```
+The player runs on port `8766`. Open:
 
 ```text
 http://127.0.0.1:8766/
 ```
 
-Private home-network mode:
+## Command Line
+
+The media directory is used only by the server running on your computer.
 
 ```powershell
-python media_player.py --media-dir <media-folder> --host 0.0.0.0 --port 8766
+media-player --media-dir <media-folder>
+media-player --media-dir <media-folder> --host 0.0.0.0
 ```
 
-```text
-http://<lan-address>:8766/
-```
+The second command allows devices on the same network to open
+`http://<lan-address>:8766/`. The launcher also supports Tailscale and a
+temporary Cloudflare tunnel to this same server.
 
-For safety, `--media-dir` accepts only the repository's expected media folder
-or one of its descendants. It is not a general filesystem browser.
-
-To clear the shared human-game world record, run:
+Reset the shared game record:
 
 ```bash
 media-player --reset-game-record
 ```
 
-This resets the record to zero and exits without starting the server.
-On Windows, the confirmation-based `windows_commands/reset_game_record.cmd`
-does the same thing by double-click.
-
 ## Configuration
 
-Start from the example config:
+Copy the example and adjust folder names, labels, and browse order:
 
 ```powershell
 copy media_player_config.example.json media_player_config.json
 ```
 
-More detail:
+More:
 
 - [Usage](docs/USAGE.md)
-- [Design Notes](docs/DESIGN.md)
 - [Architecture](docs/ARCHITECTURE.md)
 - [QA Checklist](docs/QA.md)
 - [Security](SECURITY.md)
